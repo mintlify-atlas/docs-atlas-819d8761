@@ -132,12 +132,15 @@ Understanding how the codebase is organised makes it easier to find the right fi
   │   │   ├── Grid.tsx             # Zoom-adaptive reference grid
   │   │   └── SelectionOverlay.tsx # Selection handles and transform UI
   │   └── UI/
-  │       ├── Sidebar/             # Left-side tool and brush panels
-  │       ├── ToolBar/             # Top toolbar
-  │       ├── Layers/              # Layer management panel
-  │       ├── ColorPicker/         # COPIC wheel + hex input
+  │       ├── Sidebar.tsx          # Left-side tool and brush panel
+  │       ├── ToolBar.tsx          # Top toolbar
+  │       ├── LayersNew.tsx        # Layer management panel
+  │       ├── ColorPicker.tsx      # COPIC wheel + hex input
   │       └── Parameters/
-  │           └── Export.tsx       # Export dialog (in progress)
+  │           ├── Export.tsx       # Export dialog (placeholder)
+  │           ├── Import.tsx       # Import dialog
+  │           ├── MenuBar.tsx      # Menu bar
+  │           └── ZoomRot.tsx      # Zoom and rotation controls
   ├── stores/
   │   └── canvasStore.ts           # Zustand store: all app state + actions
   ├── utils/
@@ -163,7 +166,7 @@ Understanding how the codebase is organised makes it easier to find the right fi
   ├── main.rs         # Binary entry point
   ├── file.rs         # save_canvas, load_canvas, list_canvases commands
   ├── commands.rs     # Rust structs: Stroke, Layer, Camera, CanvasState
-  └── compress.rs     # zstd compression for .folish save files
+  └── compress.rs     # Brotli compression for .flsh save files
   ```
 
   Key Tauri commands exposed to the frontend:
@@ -171,7 +174,7 @@ Understanding how the codebase is organised makes it easier to find the right fi
   | Command | File | Description |
   |---|---|---|
   | `save_canvas` | `file.rs` | Serialises and compresses canvas state to disk |
-  | `load_canvas` | `file.rs` | Reads and decompresses a `.folish` file |
+  | `load_canvas` | `file.rs` | Reads and decompresses a `.flsh` file |
   | `list_canvases` | `file.rs` | Returns all saved canvas files in the app data directory |
 </Accordion>
 
@@ -181,5 +184,5 @@ Understanding how the codebase is organised makes it easier to find the right fi
   | `vite.config.ts` | Vite config: React plugin, Tailwind CSS v4 plugin, port `1420`, HMR over WebSocket |
   | `tsconfig.json` | TypeScript strict mode config; `"target": "ES2020"`, `"jsx": "react-jsx"` |
   | `src-tauri/tauri.conf.json` | Tauri window settings, app identifier, bundle targets, permissions |
-  | `src-tauri/Cargo.toml` | Rust dependencies: `tauri`, `serde`, `tokio`, compression crates |
+  | `src-tauri/Cargo.toml` | Rust dependencies: `tauri`, `serde`, `serde_json`, `brotli` |
 </Accordion>

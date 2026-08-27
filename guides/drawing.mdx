@@ -1,7 +1,7 @@
 ---
 title: "Drawing Strokes: Brushes, Pressure, and Smoothing"
 sidebarTitle: "Drawing"
-description: "Learn how to draw on the infinite canvas in Folish — from selecting a brush and setting width to pressure sensitivity, velocity smoothing, and the Fill tool."
+description: "Draw on Folish's infinite canvas with 12 brushes, real-time velocity smoothing, stylus pressure support, and the Fill tool for closed polygon shapes."
 ---
 
 Every mark you make in Folish begins with a stroke. When you press your pointer down on the canvas, Folish starts collecting input points from your device — tracking position, velocity, and pressure — then converts them into a smooth, rendered outline using [perfect-freehand](https://github.com/steveruizok/perfect-freehand). The resulting stroke is committed to the canvas document as an immutable record the moment you lift your pointer. This architecture means the canvas is always in a consistent state, undo is predictable, and no data is ever partially written.
@@ -10,7 +10,7 @@ Every mark you make in Folish begins with a stroke. When you press your pointer 
 
 <Steps>
   <Step title="Select a brush">
-    Click a brush in the left toolbar, or use the tool slots along the bottom. The default active brush is **Pen**. You can also assign any of the 12 brushes to a toolbar slot by long-pressing the slot.
+    Click a brush in the left toolbar, or use the tool slots along the bottom. The default active brush is **Pen**. You can reassign any slot to a different brush or tool by double-clicking the slot, which opens the assignment sidebar.
   </Step>
   <Step title="Adjust stroke width">
     In the **Precision Panel** on the right, drag the width slider to the desired size. This sets the `size` parameter passed to perfect-freehand, and is stored as `activeWidth` in the canvas state.
@@ -127,7 +127,7 @@ export interface BrushProperties {
 | Watercolor | `watercolor` | `smoothing: 0.9` — very high smoothing |
 | Airbrush | `airbrush` | `thinning: 0.2` — subtle pressure response |
 | Fill | `fill` | Closed polygon fill shape |
-| Dotted | `dotted` | Dot-based stroke pattern |
+| Dotted | `dotted` | Default balanced properties (same as Pen) |
 </Accordion>
 
 ## The Fill Tool

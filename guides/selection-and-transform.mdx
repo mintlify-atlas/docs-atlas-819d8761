@@ -1,7 +1,7 @@
 ---
 title: "Select, Move, Scale, and Rotate Strokes in Folish"
 sidebarTitle: "Selection"
-description: "Use the Selection, Marquee, and Nudge tools to pick strokes, apply non-destructive transforms, and fine-tune curves with a falloff-based push-pull workflow."
+description: "Select strokes with lasso or marquee and apply non-destructive transforms. Fine-tune curves with the Nudge tool's falloff-based push-pull deformation."
 ---
 
 Folish's selection system is built around the idea that nothing you do to a stroke is permanent until you lift the pointer. All translate, scale, and rotate operations run as live previews over the original geometry — only when you release does `commitShapeTransform` write the final point positions into the document. This means you can freely drag, scale, and spin selected shapes, and a single **Ctrl+Z** will fully reverse the committed transform.
@@ -125,5 +125,5 @@ Points close to the cursor move nearly as much as your drag distance; points nea
 The nudge preview updates live on every pointer move via `setNudgePreview`, and the final geometry is written with `updateStrokeGeometry` on pointer-up.
 
 <Note>
-  The Nudge tool only affects open strokes — it does not operate on fill shapes or text objects. Strokes on locked layers are ignored; attempting to nudge them does nothing.
+  The Nudge tool works on both open strokes and fill shapes. Text objects cannot be nudged — clicking a text object with the Nudge tool does nothing because texts are looked up separately from strokes. Strokes on locked layers are always ignored.
 </Note>

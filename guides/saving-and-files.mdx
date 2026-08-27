@@ -1,7 +1,7 @@
 ---
 title: "Save, Load, and Manage Folish Canvas Projects"
 sidebarTitle: "Saving & Files"
-description: "Understand how Folish auto-saves your work every 5 seconds, where project files are stored on each OS, the compressed .folish file format, and Zustand localStorage persistence."
+description: "Folish auto-saves every 5 seconds to Brotli-compressed .flsh files in your app data folder. Learn file locations, Tauri commands, and localStorage caching."
 ---
 
 Folish uses a two-layer persistence strategy to ensure your work is never lost. A background auto-save mechanism writes the full canvas state to disk every 5 seconds via the Tauri backend, and Zustand's `persist` middleware maintains a compressed snapshot in the browser's localStorage between sessions. Both layers operate silently and independently — you never need to remember to save, but you also have full control over named project files when you need it.
@@ -45,18 +45,18 @@ Canvas files are stored in the OS-specific application data directory. Folish cr
 
 <Tabs>
   <Tab title="Windows">
-    ```
+    ```text
     %APPDATA%\folish\canvases\
     ```
     Typically resolves to `C:\Users\<username>\AppData\Roaming\folish\canvases\`
   </Tab>
   <Tab title="macOS">
-    ```
+    ```text
     ~/Library/Application Support/folish/canvases/
     ```
   </Tab>
   <Tab title="Linux">
-    ```
+    ```text
     ~/.local/share/folish/canvases/
     ```
   </Tab>
@@ -66,22 +66,26 @@ The directory is created automatically the first time Folish saves a file. You c
 
 ## File Format
 
-Each canvas project is serialised to JSON, then **compressed** before being written to disk. Files use the `.folish` extension, defined as `PROJECT_EXTENSION` in the Rust compression module.
+Each canvas project is serialised to JSON, then **compressed with Brotli** before being written to disk. Files use the `.flsh` extension, defined as `PROJECT_EXTENSION` in the Rust compression module:
+
+```rust
+pub const PROJECT_EXTENSION: &str = "flsh";
+```
 
 The file pipeline on save:
 
-```
+```text
 CanvasState (Rust struct)
   → serde_json::to_string  (JSON serialisation)
-  → compress_to_file_str   (compression)
-  → <filename>.folish      (written to canvases/)
+  → compress_to_file_str   (Brotli compression, quality 9)
+  → <filename>.flsh        (written to canvases/)
 ```
 
 And on load:
 
-```
-<filename>.folish
-  → decompress_from_file   (decompression)
+```text
+<filename>.flsh
+  → decompress_from_file   (Brotli decompression)
   → serde_json::from_str   (deserialisation)
   → CanvasState            (returned to frontend)
 ```
@@ -93,7 +97,7 @@ The Rust `CanvasState` struct mirrors the TypeScript types exactly, ensuring los
 The file system operations are exposed as three Tauri commands. All use `camelCase` naming on both the Rust and TypeScript sides.
 
 <Accordion title="save_canvas">
-Serialises and compresses the canvas, then writes it to `<filename>.folish` in the canvases directory. Overwrites any existing file with the same name.
+Serialises and compresses the canvas, then writes it to `<filename>.flsh` in the canvases directory. Overwrites any existing file with the same name.
 
 ```rust
 #[tauri::command(rename_all = "camelCase")]
@@ -115,7 +119,7 @@ await invoke("save_canvas", { canvas: doc, filename: "my-project" })
 </Accordion>
 
 <Accordion title="load_canvas">
-Reads and decompresses a `.folish` file by name (without the extension) and deserialises it into a `CanvasState`.
+Reads and decompresses a `.flsh` file by name (without the extension) and deserialises it into a `CanvasState`.
 
 ```rust
 #[tauri::command(rename_all = "camelCase")]
@@ -134,7 +138,7 @@ const canvas = await invoke<CanvasState>("load_canvas", { filename: "my-project"
 </Accordion>
 
 <Accordion title="list_canvases">
-Scans the canvases directory and returns a sorted list of all project names (without the `.folish` extension). Only files matching the project extension are included.
+Scans the canvases directory and returns a sorted list of all project names (without the `.flsh` extension). Only files matching the project extension are included.
 
 ```rust
 #[tauri::command(rename_all = "camelCase")]
@@ -154,9 +158,9 @@ const projects = await invoke<string[]>("list_canvases")
 
 ## localStorage Persistence
 
-In addition to the Tauri file backend, Zustand's `persist` middleware keeps a compressed snapshot of the canvas in the browser's `localStorage` under the key `folish-storage` (schema version `2`). This allows the canvas to reload instantly on app restart without waiting for a file read.
+In addition to the Tauri file backend, Zustand's `persist` middleware keeps a snapshot of the canvas document in the browser's `localStorage` under the key `folish-storage` (schema version `2`). This allows the canvas to reload instantly on app restart without waiting for a file read.
 
-Stroke points are encoded as base64 before storage to reduce size:
+Only the `doc` portion of the store state is persisted — the `ui` state (active tool, camera position, selection) is not saved to localStorage and resets to defaults on each launch. Stroke points are encoded as base64 before storage to reduce size:
 
 ```typescript
 partialize: (state) => ({

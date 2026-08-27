@@ -1,5 +1,5 @@
 ---
-title: "Brushes and Tools: Complete Reference for Folish"
+title: "Brushes and Tools: Full Reference Guide for Folish"
 sidebarTitle: "Tools & Brushes"
 description: "Full reference for Folish's 12 brushes and 10 tools: BrushProperties fields, per-brush stroke characteristics, tool functions, and default toolbar slots."
 ---
@@ -111,7 +111,7 @@ export interface SlotAssignment {
 ```
 
 <Info>
-  When a brush slot is active, Folish uses the brush's `BrushProperties` combined with your current `activeWidth`, `activeColor`, `activeOpacity`, and `activeSmooth` settings to generate each stroke. The `activeSmooth` value (0–1) is a per-session override that lets you adjust smoothing on the fly without changing the brush preset.
+  When a brush slot is active, Folish uses the brush's `BrushProperties` combined with your current `activeWidth`, `activeColor`, and `activeOpacity` settings to generate each stroke. `activeSmooth` is a UI preference stored in `UIState` and displayed in the precision panel; it is not persisted between sessions.
 </Info>
 
 ## Keyboard Shortcuts
