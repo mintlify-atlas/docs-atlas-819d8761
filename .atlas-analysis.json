@@ -1,0 +1,90 @@
+{
+  "projectType": "saas",
+  "projectName": "Folish",
+  "projectDescription": "A high-performance infinite canvas drawing application built with Tauri, React, and TypeScript, inspired by Concepts App.",
+  "theme": "willow",
+  "primaryColor": "#ed943b",
+  "lightColor": "#26a1b1",
+  "darkColor": "#d4e1e9",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/canvas",
+              "concepts/layers",
+              "concepts/tools-and-brushes"
+            ]
+          },
+          {
+            "group": "Using Folish",
+            "pages": [
+              "guides/drawing",
+              "guides/selection-and-transform",
+              "guides/text",
+              "guides/color-and-style",
+              "guides/saving-and-files"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/keyboard-shortcuts",
+              "reference/brush-properties",
+              "reference/tech-stack"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "contributing/overview",
+              "contributing/development-setup",
+              "contributing/roadmap"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Infinite canvas with pan, zoom, and rotation",
+    "High-performance SVG rendering with canvas overlay for live strokes",
+    "12 brush types: Pen, Fountain, Dynamic Pen, Marker, Watercolor, Airbrush, and more",
+    "Full stylus/tablet pressure sensitivity (Wacom, Huion)",
+    "Velocity-based stroke smoothing algorithm",
+    "Unlimited layer management with visibility, lock, opacity, and drag-to-reorder",
+    "Selection tools: lasso, marquee, translate, scale, rotate",
+    "Nudge tool for post-draw stroke point manipulation",
+    "Fill tool for closed polygon regions",
+    "Text tool for canvas annotations",
+    "COPIC color wheel with 69 curated sections plus custom hex input",
+    "Auto-save via Tauri backend with compressed project files",
+    "Undo/redo history (up to 50 steps) powered by Immer patches",
+    "RBush-based spatial index for efficient viewport culling",
+    "Persistent state via Zustand with compressed point storage"
+  ],
+  "publicApiSurface": [
+    "useCanvasStore — Zustand store with all canvas and UI state actions",
+    "useCanvasEvents — pointer/wheel event hook for the infinite canvas",
+    "useCanvasMath — coordinate transformation utilities (toWorld, calculateZoom)",
+    "useAutoSave — auto-saves canvas state via Tauri invoke at configurable interval",
+    "SpatialIndex — RBush-backed spatial index for viewport queries",
+    "getSvgPathFromStroke(stroke) — converts perfect-freehand output to SVG path string",
+    "BRUSHES — array of 12 BrushItem presets with BrushProperties",
+    "TOOLS — array of 10 ToolItem definitions",
+    "Tauri command: save_canvas(canvas, filename) — compress and save project file",
+    "Tauri command: load_canvas(filename) — decompress and load project file",
+    "Tauri command: list_canvases() — list all saved project files"
+  ]
+}

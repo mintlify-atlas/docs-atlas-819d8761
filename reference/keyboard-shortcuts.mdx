@@ -1,0 +1,60 @@
+---
+title: "Keyboard Shortcuts and Mouse Controls Quick Reference"
+sidebarTitle: "Shortcuts"
+description: "Complete reference for every keyboard shortcut, mouse control, and trackpad gesture in Folish — from undo/redo to canvas navigation and text editing."
+---
+
+Folish is built for efficient keyboard and stylus workflows: every frequently repeated action — undo, redo, pan, zoom — has a direct input binding so your hands never leave the drawing surface. Whether you are working with a Wacom tablet, a trackpad, or a standard mouse, the controls adapt to your hardware and let you stay in creative flow rather than hunting through menus.
+
+## Drawing & Editing
+
+These shortcuts apply any time the canvas is focused and a brush or tool is active.
+
+| Action | Shortcut |
+|---|---|
+| Undo | `Ctrl` + `Z` |
+| Redo | `Ctrl` + `Shift` + `Z` |
+| Delete selected | `Delete` / `Backspace` |
+
+<Note>
+Folish keeps up to **50 undo steps** in memory. Each step is stored as an Immer patch rather than a full canvas snapshot, so the history buffer stays compact even with complex multi-layer documents.
+</Note>
+
+## Canvas Navigation
+
+Pan and zoom controls work regardless of the currently active tool, so you can reframe your view without interrupting a drawing session.
+
+| Action | Shortcut |
+|---|---|
+| Pan canvas | `Middle Mouse` or `Ctrl` + `Drag` |
+| Zoom in / out | `Scroll Wheel` |
+| Context menu | `Right Click` (on a layer) |
+
+<Tip>
+You can pan with **Ctrl + Drag** on any active brush tool — there is no need to switch to the Pan tool first. This is the fastest way to reposition the canvas mid-stroke session.
+</Tip>
+
+## Text Editing
+
+These shortcuts are active only when a text box is open and focused (i.e., after placing a text shape with the Text tool).
+
+| Action | Shortcut |
+|---|---|
+| Commit text | `Enter` |
+| New line | `Shift` + `Enter` |
+| Cancel edit | `Escape` |
+
+## Trackpad Gestures
+
+Folish detects whether input is coming from a trackpad or a traditional scroll wheel by inspecting the magnitude of the wheel delta: when the largest axis delta is less than **50**, the event is treated as trackpad input; larger deltas are classified as a mouse scroll wheel.
+
+| Gesture | Result |
+|---|---|
+| Two-finger scroll | Pans the canvas (multiplied by ×2.5 for natural feel) |
+| Two-finger pinch (`Ctrl` + scroll) | Zooms in or out |
+
+Trackpad pan uses a **2.5× multiplier** applied to `deltaX` and `deltaY` so the canvas follows your fingers at a comfortable speed. Trackpad zoom also uses a higher multiplier than mouse scroll (10× vs 1×) because trackpad pinch gestures produce much smaller raw delta values, ensuring consistent zoom speed across both input types.
+
+<Info>
+The trackpad vs. mouse detection logic lives in `src/hooks/useCanvasEvents.ts` inside the `handleWheel` callback. The threshold constant (`50`) was tuned empirically across common trackpad hardware.
+</Info>

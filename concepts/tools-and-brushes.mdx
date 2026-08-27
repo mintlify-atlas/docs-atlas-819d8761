@@ -1,0 +1,125 @@
+---
+title: "Brushes and Tools: Complete Reference for Folish"
+sidebarTitle: "Tools & Brushes"
+description: "Full reference for Folish's 12 brushes and 10 tools: BrushProperties fields, per-brush stroke characteristics, tool functions, and default toolbar slots."
+---
+
+Folish ships with 12 brushes tuned for different mark-making styles and 10 tools that handle everything from freehand selection to text placement. Brushes and tools share the same toolbar and slot system — you can assign any brush or tool to any numbered slot and switch between them instantly. This page covers every brush and tool in detail, including the underlying `BrushProperties` that govern how each stroke looks and feels.
+
+## Brushes
+
+Each brush is defined by a set of `BrushProperties` values that are passed to `perfect-freehand`'s `getStroke` function at draw time. These properties control how the stroke outline is generated from the raw input points.
+
+### BrushProperties Reference
+
+All brushes inherit from a shared `DEFAULT_BRUSH` baseline and override specific fields to achieve their character:
+
+```typescript
+// From src/utils/brushConfig.ts
+export const DEFAULT_BRUSH = {
+  smoothing: 0.5,
+  thinning: 0.5,
+  streamline: 0.5,
+  easing: (t: any) => t,
+  start: {
+    taper: 0,
+    cap: true,
+  },
+  end: {
+    taper: 0,
+    cap: true,
+  },
+}
+```
+
+| Property | Type | What it controls |
+|---|---|---|
+| `smoothing` | `0.0 – 1.0` | How much the stroke outline is smoothed. Higher values round off jagged edges; lower values follow input precisely. |
+| `thinning` | `-1.0 – 1.0` | How much pressure affects stroke width. Positive thins on high pressure; negative widens on high pressure; `0` means fixed width. |
+| `streamline` | `0.0 – 1.0` | How much the input path is streamlined before generating the outline. Higher values produce flowing, lag-dampened lines. |
+| `easing` | `(t) => t` | A timing function applied to pressure values. The default is linear; custom brushes can use easing curves. |
+| `start.taper` | `number` | Length of the taper-in at the start of the stroke (in canvas units). `0` means no taper. |
+| `start.cap` | `boolean` | Whether to draw a rounded cap at the start of the stroke. |
+| `end.taper` | `number` | Length of the taper-out at the end of the stroke. `0` means no taper. |
+| `end.cap` | `boolean` | Whether to draw a rounded cap at the end of the stroke. |
+
+### All 12 Brushes
+
+| Brush | ID | Key Properties | Character |
+|---|---|---|---|
+| **Pen** | `pen` | `smoothing: 0.5` `thinning: 0.5` `streamline: 0.5` | The balanced all-purpose brush. Responds naturally to pressure with moderate smoothing and streamlining. |
+| **Fountain** | `fountain` | `thinning: 0.7` | Exaggerated pressure response mimics a fountain pen nib — thin on light touch, dramatically wider on heavy press. |
+| **Dynamic Pen** | `dynamic-pen` | `streamline: 0.8` | Heavily streamlined input path produces sweeping, lag-dampened curves ideal for calligraphy and gesture drawing. |
+| **Fixed Width** | `fixed-width` | `thinning: 0` | Zero thinning means stroke width is constant regardless of pressure — a precise technical pen. |
+| **Wire** | `wire` | `smoothing: 0.1` `thinning: 0` | Very low smoothing with no thinning creates a wiry, immediate line that faithfully follows every twitch of the input. |
+| **Soft Pencil** | `soft-pencil` | `smoothing: 0.8` | High smoothing produces a flowing, blended pencil stroke — great for sketching and hatching. |
+| **Hard Pencil** | `hard-pencil` | `smoothing: 0.2` | Low smoothing preserves grain and edge detail, giving an angular pencil feel for tight linework. |
+| **Marker** | `marker` | `thinning: -0.5` | Negative thinning means the stroke widens under pressure, replicating a chisel-tip marker. |
+| **Watercolor** | `watercolor` | `smoothing: 0.9` | Maximum smoothing produces extremely soft, organic edges ideal for loose painterly strokes. |
+| **Airbrush** | `airbrush` | `thinning: 0.2` | Low thinning with subtle pressure variation creates a soft, diffuse spray effect. |
+| **Fill** | `fill` | Default properties | Draws closed polygon regions rather than open strokes — see note below. |
+| **Dotted** | `dotted` | Default properties | Renders a dotted stroke pattern along the input path. |
+
+<Tip>
+  The **Fill** brush works differently from every other brush. As you draw, Folish traces a closed polygon outline from your input path. When you lift your stylus, the polygon is closed and filled with the active colour. You can draw any shape — not just simple rectangles or circles — and it fills instantly on pointer up.
+</Tip>
+
+## Tools
+
+Tools in Folish do not draw strokes — they manipulate the canvas, navigate the view, or interact with existing content. The 10 available tools are listed below.
+
+### All 10 Tools
+
+| Tool | ID | Function | Description |
+|---|---|---|---|
+| **Selection** | `selection` | `select` | Lasso-select strokes and text shapes by drawing a freehand boundary around them. Shift-click to add to an existing selection. |
+| **Marquee** | `marquee` | `marquee` | Draw a rectangular marquee to select content. Drag a corner handle to scale the selection; drag the rotation handle to rotate it; drag inside to translate. |
+| **Nudge** | `nudge` | `nudge` | Click near a stroke and drag to warp its control points within a circular influence radius. Creates smooth, localised edits to existing strokes. |
+| **Slice** | `slice` | `slice` | Draw a cut line across one or more strokes to split them at the intersection points. |
+| **Hard Mask** | `hard-mask` | `hard-mask` | Applies a sharp-edged mask to clip drawing to a defined region. |
+| **Soft Mask** | `soft-mask` | `soft-mask` | Applies a feathered mask that fades content at the boundary rather than clipping hard. |
+| **Text** | `text` | `text` | Click anywhere on the canvas to place a text box. Type to enter text; press **Enter** to commit, or click elsewhere. Click an existing text shape to edit it. |
+| **Pan** | `pan` | `pan` | Drag to scroll the canvas in any direction. Equivalent to holding the middle mouse button with any other tool active. |
+| **Rotate** | `rotate` | `rotate` | Drag horizontally to rotate the entire canvas. The rotation pivots around the centre of the screen at **0.35 degrees per pixel** of drag distance. |
+| **Zoom** | `zoom` | `zoom` | Click to zoom in; right-click or Alt-click to zoom out. The scroll wheel zooms regardless of the active tool. |
+
+## Tool Slots
+
+The toolbar is divided into **10 numbered slots** (indices 0–9). Each slot can hold either a brush or a tool. The default slot assignments from the store's initial state are:
+
+```typescript
+// From src/stores/canvasStore.ts — initialUI.toolSlots
+toolSlots: {
+  0: { type: "brush", id: "pen" },
+  1: { type: "brush", id: "fill" },
+  2: { type: "tool",  id: "selection" },
+  3: { type: "tool",  id: "marquee" },
+  4: { type: "tool",  id: "text" },
+  5: { type: "tool",  id: "nudge" },
+  6: { type: "tool",  id: "pan" },
+  9: { type: "tool",  id: "rotate" },
+}
+```
+
+Slots 7 and 8 are empty by default and can be assigned freely. Each `SlotAssignment` carries a `type` (`"brush"` or `"tool"`) and the `id` of the assigned item:
+
+```typescript
+export interface SlotAssignment {
+  type: "brush" | "tool"
+  id: string
+}
+```
+
+<Info>
+  When a brush slot is active, Folish uses the brush's `BrushProperties` combined with your current `activeWidth`, `activeColor`, `activeOpacity`, and `activeSmooth` settings to generate each stroke. The `activeSmooth` value (0–1) is a per-session override that lets you adjust smoothing on the fly without changing the brush preset.
+</Info>
+
+## Keyboard Shortcuts
+
+| Action | Shortcut |
+|---|---|
+| Undo | **Ctrl+Z** |
+| Redo | **Ctrl+Shift+Z** |
+| Pan (any tool) | **Middle Mouse Drag** or **Ctrl+Drag** |
+| Zoom | **Scroll Wheel** |
+| Context menu (layers panel) | **Right Click** on a layer |

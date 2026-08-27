@@ -1,47 +1,127 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Drawing with Folish in Under Five Minutes"
+sidebarTitle: "Quickstart"
+description: "A hands-on walkthrough that takes you from launching Folish for the first time to completing a multi-layer drawing with undo history and canvas navigation."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
+This quickstart walks you through everything you need to make your first drawing in Folish — from launching the app to managing layers and navigating the infinite canvas. By the end you will have drawn a stroke, panned and zoomed the canvas, added a second layer, and used undo. If you haven't built the app yet, complete the [Installation](/installation) guide first.
 
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+## Your First Drawing
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Launch Folish">
+    From the root of the repository, start the development build:
 
     ```bash
-    npm install your-package
+    pnpm tauri dev
     ```
+
+    The Folish window opens once Vite and the Rust backend are both ready. You will see an empty canvas with the toolbar on the left, the layers panel on the right, and the precision panel below the toolbar.
+
+    <Tip>
+      After the first cold compile, subsequent launches are much faster because Cargo's incremental cache is warm. If you built a production binary with `pnpm tauri build`, launch it directly from `src-tauri/target/release/folish`.
+    </Tip>
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
 
-    ```bash
-    your-cli init
-    ```
+  <Step title="Select a brush">
+    The **Pen** brush is active by default when Folish starts — you can confirm this by looking at the highlighted slot in the toolbar. The Pen uses balanced smoothing (`0.5`), thinning (`0.5`), and streamline (`0.5`) values, making it a great all-round starting point.
+
+    To try a different brush, click any slot in the toolbar. The full brush palette includes:
+
+    | Brush | Character |
+    |---|---|
+    | Pen | Balanced pressure response, great all-rounder |
+    | Fountain | Higher thinning (`0.7`) — lines taper strongly at low pressure |
+    | Dynamic Pen | High streamline (`0.8`) — follows your path with smooth interpolation |
+    | Fixed Width | Zero thinning — uniform stroke weight regardless of pressure |
+    | Wire | Minimal smoothing, zero thinning — raw, scratchy lines |
+    | Soft Pencil | High smoothing (`0.8`) — gentle, blended edges |
+    | Hard Pencil | Low smoothing (`0.2`) — crisp, immediate marks |
+    | Marker | Negative thinning (`-0.5`) — lines flare wider under pressure |
+    | Watercolor | Very high smoothing (`0.9`) — the softest, most diffuse brush |
+    | Airbrush | Low thinning (`0.2`) — soft spray-like coverage |
+    | Fill | Flood fill behaviour |
+    | Dotted | Discrete dot marks along the stroke path |
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
 
-    ```bash
-    your-cli start
-    ```
+  <Step title="Set color and stroke width">
+    With your brush selected, configure the stroke in the **Precision Panel**:
+
+    - **Color** — click the color swatch to open the COPIC-inspired color wheel. It has 69 curated sections that map to the COPIC Sketch marker range. You can also type any hex value directly into the input field.
+    - **Width** — drag the width slider or type a value. Width is measured in canvas units; it scales with zoom so strokes always appear at the same physical size on screen.
+    - **Opacity** — set per-stroke opacity from 0 to 1 using the opacity control.
+    - **Smoothing** — the `activeSmooth` value (0–1) adds additional velocity-based stabilisation on top of the brush's built-in `streamline` and `smoothing` properties.
+
+    <Info>
+      Width and opacity are stored per-stroke at draw time. Changing them after drawing won't affect existing strokes — use the Selection tool to recolour selected shapes via the precision panel.
+    </Info>
+  </Step>
+
+  <Step title="Draw on the canvas">
+    Click (or tap with a stylus) and drag anywhere on the canvas to draw your first stroke. As you draw, Folish renders a live preview on an HTML Canvas overlay using `requestAnimationFrame` for maximum responsiveness. When you lift the pointer, the finalised stroke is committed to the SVG layer as an optimised path.
+
+    Under the hood, perfect-freehand converts your raw pointer points into a smooth outline using the brush's `smoothing`, `thinning`, `streamline`, and taper properties. **Velocity smoothing** adapts the stabilisation in real time — draw slowly for precise, controlled marks; draw quickly for loose, energetic lines. The result is stored as an immutable `Stroke` object in the Zustand store and indexed in the RBush spatial tree so it only re-renders when inside the viewport.
+
+    <Tip>
+      If you are using a Wacom or Huion stylus, pressure data is captured automatically and fed into stroke thinning. No driver configuration is required beyond the standard tablet setup for your OS.
+    </Tip>
+  </Step>
+
+  <Step title="Navigate the canvas">
+    Folish's canvas is infinite — there are no boundaries in any direction. Use these controls to move around:
+
+    | Action | Input |
+    |---|---|
+    | **Pan** | Middle mouse button + drag, or **Ctrl + drag** with any drawing tool |
+    | **Zoom in / out** | Scroll wheel |
+    | **Rotate canvas** | Select the **Rotate** tool from the toolbar, then drag |
+
+    Zoom is centered on your cursor position, so you can scroll directly over the area of interest to zoom in without the view jumping. The dynamic grid scales with zoom level and stays readable at any magnification.
+
+    <Note>
+      The camera state — `x`, `y`, `zoom`, and `rotation` — is stored in `UIState` and is not part of the undo history. Panning and zooming never consume an undo step.
+    </Note>
+  </Step>
+
+  <Step title="Add a layer">
+    Open the **Layers Panel** on the right side of the window. Folish starts with a single layer called *Layer 1*. To add a new layer:
+
+    1. Click the **+** button at the bottom of the Layers Panel.
+    2. The new layer is created above the current one and immediately becomes the active layer.
+    3. Any strokes you draw now land on the new layer without affecting *Layer 1*.
+
+    You can right-click a layer in the panel to access the context menu, which lets you rename, duplicate, lock, toggle visibility, adjust opacity, or delete the layer. Layers can also be reordered by dragging them up or down in the panel.
+
+    <Tip>
+      Lock a layer (via the context menu or the lock icon) to prevent accidental edits. Locked layers are visible and render normally — you just can't draw on them until you unlock them.
+    </Tip>
+  </Step>
+
+  <Step title="Undo your changes">
+    Made a mark you don't want? Press **Ctrl+Z** to undo. Each undo step reverses one discrete change — a stroke, a layer addition, a rename, and so on. Folish keeps up to **50 undo steps** in memory.
+
+    | Action | Shortcut |
+    |---|---|
+    | Undo | **Ctrl+Z** |
+    | Redo | **Ctrl+Shift+Z** |
+
+    Undo and redo are powered by Immer's `produceWithPatches`, which stores compact structural diffs (patches and inverse patches) for each operation rather than copying the full canvas state. This keeps memory usage low even with a large undo stack.
+
+    <Info>
+      Auto-save runs every five seconds in the background via the Tauri backend and does not interact with the undo stack. You can undo freely even after an auto-save has occurred — your history is preserved in memory until you close the app.
+    </Info>
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## What's Next?
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+Now that you've made your first drawing, dive deeper into the two areas that shape everything you do in Folish:
+
+<CardGroup cols={2}>
+  <Card title="Layers" icon="layer-group" href="/concepts/layers">
+    Learn the full layer system — visibility, locking, opacity, duplication, reordering, and how layers interact with the spatial index.
+  </Card>
+  <Card title="Tools & Brushes" icon="paintbrush" href="/concepts/tools-and-brushes">
+    A deep dive into all 12 brushes and 10 tools, their underlying properties, and when each one is the right choice for the job.
+  </Card>
+</CardGroup>

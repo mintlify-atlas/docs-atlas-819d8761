@@ -1,0 +1,132 @@
+---
+title: "Install Folish: Build from Source on macOS, Windows, Linux"
+sidebarTitle: "Installation"
+description: "Step-by-step guide to building Folish from source. Covers Node.js, Rust, and pnpm prerequisites plus dev and production build commands."
+---
+
+Folish is a native desktop application built with Tauri, which means you compile it from source rather than downloading a pre-built installer (unless you grab a release binary from GitHub). The build process is straightforward: you need Node.js for the React frontend, Rust for the Tauri backend, and pnpm as the package manager. Folish supports macOS, Windows, and Linux — Tauri produces a platform-native binary for whichever OS you build on.
+
+## Prerequisites
+
+Before cloning the repository, make sure the following tools are installed on your system:
+
+| Tool | Minimum version | Install |
+|---|---|---|
+| Node.js | v16 or higher | [nodejs.org](https://nodejs.org/) |
+| Rust | stable toolchain | [rust-lang.org](https://www.rust-lang.org/tools/install) |
+| pnpm | v8 or higher | `npm install -g pnpm` |
+
+<Note>
+  Tauri also requires a set of system-level dependencies that vary by platform — WebView2 on Windows, Xcode Command Line Tools on macOS, and several libraries on Linux. Consult the [Tauri v2 prerequisites guide](https://tauri.app/start/prerequisites/) for the full list before continuing.
+</Note>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Install prerequisites">
+    Download and install [Node.js](https://nodejs.org/) (v16+) and the [Rust stable toolchain](https://www.rust-lang.org/tools/install) via `rustup`. Verify both are available on your `PATH`:
+
+    ```bash
+    node --version   # should print v16.x.x or higher
+    rustc --version  # should print rustc 1.x.x (stable)
+    ```
+
+    Install pnpm if you haven't already:
+
+    ```bash
+    npm install -g pnpm
+    ```
+  </Step>
+
+  <Step title="Clone the repository">
+    Clone the Folish source from GitHub and navigate into the project directory:
+
+    ```bash
+    git clone https://github.com/ppmpreetham/folish.git
+    cd folish
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Install all JavaScript and TypeScript dependencies declared in `package.json`:
+
+    ```bash
+    pnpm install
+    ```
+
+    This resolves React 19, Zustand v5, perfect-freehand, rbush, GSAP, and every other frontend dependency in one step. The Rust crates are fetched automatically by Cargo during the next step.
+  </Step>
+
+  <Step title="Run in development mode">
+    Start the Tauri development server. This launches the Vite dev server for the frontend and compiles the Rust backend, then opens the Folish window:
+
+    ```bash
+    pnpm tauri dev
+    ```
+
+    The app window will appear once both the Vite server and the Rust compilation are complete. Hot-module replacement is active for the frontend — save a `.tsx` file and the UI updates without restarting.
+
+    <Note>
+      The first time you run `pnpm tauri dev`, Cargo must compile the Rust backend and all its dependencies from scratch. This can take **two to five minutes** depending on your hardware. Subsequent runs use the incremental build cache and are significantly faster.
+    </Note>
+  </Step>
+</Steps>
+
+## Production Build
+
+To produce a standalone, distributable binary for your operating system, run:
+
+```bash
+pnpm tauri build
+```
+
+Tauri compiles the frontend with Vite (`tsc && vite build`), then bundles the result into a native installer. The output lands in:
+
+```
+src-tauri/target/release/
+```
+
+The exact artifact depends on your platform:
+
+| Platform | Output |
+|---|---|
+| macOS | `.app` bundle + `.dmg` installer |
+| Windows | `.msi` installer + `.exe` setup |
+| Linux | `.deb`, `.rpm`, and/or AppImage |
+
+<Note>
+  Production builds enable full Rust release optimisations (`--release`). The first production build takes longer than subsequent ones for the same reason as `tauri dev` — Cargo compiles everything from scratch. Expect **five to ten minutes** on a typical developer machine.
+</Note>
+
+The `bundle.targets` field in `src-tauri/tauri.conf.json` is set to `"all"`, so Tauri generates every applicable installer format for your platform in one pass.
+
+## Recommended IDE Setup
+
+<Tip>
+  For the best development experience, use [VS Code](https://code.visualstudio.com/) with two extensions installed:
+
+  - **[Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode)** — adds Tauri-specific commands, `tauri.conf.json` schema validation, and integrated Tauri CLI access directly from the editor.
+  - **[rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)** — provides full Rust language support: inline type hints, go-to-definition, auto-imports, and real-time error checking for the code in `src-tauri/src/`.
+
+  Together they give you a unified full-stack editing environment where TypeScript and Rust code are both first-class.
+</Tip>
+
+## Project Structure Overview
+
+After cloning, the key directories are:
+
+```
+folish/
+├── src/                    # React + TypeScript frontend
+│   ├── components/         # UI components (Canvas, Layers, Toolbar…)
+│   ├── hooks/              # Custom hooks (useCanvasEvents, useAutoSave…)
+│   ├── stores/             # Zustand store (canvasStore.ts)
+│   ├── utils/              # Brush engine, spatial index, toolsData…
+│   └── types.ts            # Shared TypeScript interfaces
+├── src-tauri/
+│   ├── src/                # Rust backend (file.rs, commands.rs…)
+│   ├── tauri.conf.json     # Tauri configuration
+│   └── Cargo.toml          # Rust dependencies
+├── package.json
+└── vite.config.ts
+```

@@ -1,0 +1,185 @@
+---
+title: "Set Up Your Folish Development Environment Locally"
+sidebarTitle: "Dev Setup"
+description: "Prerequisites, install steps, available dev scripts, recommended VS Code extensions, and a full project structure reference for running Folish locally."
+---
+
+Getting Folish running locally takes only a few minutes if you already have Rust and Node.js installed. The development stack combines a Vite dev server for the React frontend and a live-reloading Rust binary for the Tauri backend — both start together with a single command. This guide walks through everything from prerequisites to understanding where each piece of the codebase lives.
+
+## Prerequisites
+
+Before cloning the repository, make sure the following tools are installed on your machine:
+
+<CardGroup cols={2}>
+  <Card title="Node.js v16+" icon="node">
+    Download from [nodejs.org](https://nodejs.org/). Folish requires Node.js v16 or higher. Node.js v20 LTS is recommended for the most stable experience.
+  </Card>
+  <Card title="Rust stable toolchain" icon="gear">
+    Install `rustup` from [rustup.rs](https://rustup.rs/), then run:
+
+    ```bash
+    rustup install stable
+    ```
+  </Card>
+  <Card title="pnpm" icon="box">
+    Folish uses pnpm as its package manager. Install it globally via npm:
+
+    ```bash
+    npm install -g pnpm
+    ```
+  </Card>
+  <Card title="Tauri prerequisites" icon="window">
+    Tauri requires platform-specific system dependencies (WebView2 on Windows, WebKit on Linux). Follow the full guide at [tauri.app/start/prerequisites](https://tauri.app/start/prerequisites/).
+  </Card>
+</CardGroup>
+
+## Setup Steps
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the Folish repository from GitHub and enter the project directory:
+
+    ```bash
+    git clone https://github.com/ppmpreetham/folish.git && cd folish
+    ```
+  </Step>
+  <Step title="Install JavaScript dependencies">
+    Install all frontend dependencies using pnpm:
+
+    ```bash
+    pnpm install
+    ```
+
+    This installs React 19, Zustand, Immer, perfect-freehand, rbush, GSAP, Tailwind CSS v4, and all other packages listed in `package.json`. Rust crates are fetched automatically by Cargo on first build.
+  </Step>
+  <Step title="Start the development server">
+    Launch the full application — Vite dev server and Tauri Rust backend — in a single command:
+
+    ```bash
+    pnpm tauri dev
+    ```
+
+    Vite listens on port `1420` with strict port enforcement. The Tauri window opens automatically once the Rust binary compiles, which takes a minute on the first run as Cargo downloads and compiles dependencies.
+  </Step>
+</Steps>
+
+<Tip>
+  Enable Tauri's built-in devtools by right-clicking inside the Tauri window while in dev mode and selecting **Inspect Element**. The Zustand store state is also inspectable in real time via the Redux DevTools browser extension — connect to it from the Chromium devtools panel within the Tauri window.
+</Tip>
+
+## Available Scripts
+
+All scripts are defined in `package.json` and run via pnpm:
+
+<Tabs>
+  <Tab title="Development">
+    | Command | Description |
+    |---|---|
+    | `pnpm dev` | Starts the Vite dev server only (no Tauri window). Use this for rapid UI iteration without recompiling Rust. The frontend is served at `http://localhost:1420`. |
+    | `pnpm tauri dev` | Starts both the Vite dev server and the Tauri backend together. Opens a native desktop window with hot module replacement for the frontend and live-reloading for the Rust backend. |
+  </Tab>
+  <Tab title="Build">
+    | Command | Description |
+    |---|---|
+    | `pnpm build` | Runs `tsc` for type checking, then Vite to bundle the frontend. Outputs compiled assets to `dist/`. |
+    | `pnpm tauri build` | Compiles the frontend and Rust binary in release mode, then packages a platform-native installer (`.msi` on Windows, `.dmg` on macOS, `.deb`/`.AppImage` on Linux). |
+  </Tab>
+  <Tab title="Preview">
+    | Command | Description |
+    |---|---|
+    | `pnpm preview` | Serves the already-built `dist/` directory locally via Vite's preview server. Run `pnpm build` first. |
+  </Tab>
+</Tabs>
+
+## Recommended IDE Setup
+
+The `.vscode/extensions.json` file in the repository recommends two extensions that together give you full IDE support for both sides of the stack:
+
+```json
+{
+  "recommendations": ["tauri-apps.tauri-vscode", "rust-lang.rust-analyzer"]
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="Tauri for VS Code" icon="puzzle-piece">
+    Extension ID: `tauri-apps.tauri-vscode`
+
+    Provides Tauri command integration, `tauri.conf.json` schema validation, and quick access to the Tauri CLI from VS Code's command palette.
+  </Card>
+  <Card title="rust-analyzer" icon="magnifying-glass">
+    Extension ID: `rust-lang.rust-analyzer`
+
+    Full Rust language server support: inline type hints, error diagnostics, auto-imports, and go-to-definition across the `src-tauri/` Rust codebase.
+  </Card>
+</CardGroup>
+
+After installing both extensions, open the `folish/` directory as your VS Code workspace root (not a parent folder) so that rust-analyzer correctly resolves the `src-tauri/Cargo.toml` workspace.
+
+## Project Structure
+
+Understanding how the codebase is organised makes it easier to find the right file to edit. Folish has a clean separation between the TypeScript frontend and the Rust backend:
+
+<Accordion title="src/ — React + TypeScript frontend">
+  The entire frontend application lives here. TypeScript's `"include": ["src"]` in `tsconfig.json` means the compiler only processes this directory.
+
+  ```
+  src/
+  ├── components/
+  │   ├── Canvas/
+  │   │   ├── InfiniteCanvas.tsx   # Root canvas component, SVG + overlay composition
+  │   │   ├── Renderer.tsx         # Committed stroke SVG rendering
+  │   │   ├── Grid.tsx             # Zoom-adaptive reference grid
+  │   │   └── SelectionOverlay.tsx # Selection handles and transform UI
+  │   └── UI/
+  │       ├── Sidebar/             # Left-side tool and brush panels
+  │       ├── ToolBar/             # Top toolbar
+  │       ├── Layers/              # Layer management panel
+  │       ├── ColorPicker/         # COPIC wheel + hex input
+  │       └── Parameters/
+  │           └── Export.tsx       # Export dialog (in progress)
+  ├── stores/
+  │   └── canvasStore.ts           # Zustand store: all app state + actions
+  ├── utils/
+  │   ├── brushEngine.ts           # getSvgPathFromStroke via perfect-freehand
+  │   ├── spatialIndex.ts          # SpatialIndex class wrapping rbush
+  │   ├── toolsData.ts             # BRUSHES (12) and TOOLS (10) arrays
+  │   ├── brushConfig.ts           # DEFAULT_BRUSH configuration
+  │   └── math.ts                  # Canvas coordinate math helpers
+  ├── hooks/
+  │   ├── useCanvasEvents.ts       # Pointer + wheel event handling
+  │   ├── useCanvasMath.ts         # Screen ↔ world coordinate transforms
+  │   └── useAutoSave.ts           # 5-second auto-save hook
+  └── types.ts                     # Shared TypeScript interfaces
+  ```
+</Accordion>
+
+<Accordion title="src-tauri/src/ — Rust backend">
+  The Tauri application shell and all native functionality are implemented in Rust here.
+
+  ```
+  src-tauri/src/
+  ├── lib.rs          # Tauri app builder, command registration
+  ├── main.rs         # Binary entry point
+  ├── file.rs         # save_canvas, load_canvas, list_canvases commands
+  ├── commands.rs     # Rust structs: Stroke, Layer, Camera, CanvasState
+  └── compress.rs     # zstd compression for .folish save files
+  ```
+
+  Key Tauri commands exposed to the frontend:
+
+  | Command | File | Description |
+  |---|---|---|
+  | `save_canvas` | `file.rs` | Serialises and compresses canvas state to disk |
+  | `load_canvas` | `file.rs` | Reads and decompresses a `.folish` file |
+  | `list_canvases` | `file.rs` | Returns all saved canvas files in the app data directory |
+</Accordion>
+
+<Accordion title="Configuration files">
+  | File | Purpose |
+  |---|---|
+  | `vite.config.ts` | Vite config: React plugin, Tailwind CSS v4 plugin, port `1420`, HMR over WebSocket |
+  | `tsconfig.json` | TypeScript strict mode config; `"target": "ES2020"`, `"jsx": "react-jsx"` |
+  | `src-tauri/tauri.conf.json` | Tauri window settings, app identifier, bundle targets, permissions |
+  | `src-tauri/Cargo.toml` | Rust dependencies: `tauri`, `serde`, `tokio`, compression crates |
+</Accordion>

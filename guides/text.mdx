@@ -1,0 +1,160 @@
+---
+title: "Add and Edit Text Annotations on the Folish Canvas"
+sidebarTitle: "Text"
+description: "Create, edit, and transform text annotations anywhere on the infinite canvas using the Text tool — with auto-resizing text boxes, commit and cancel controls, and full transform support."
+---
+
+Folish lets you place text annotations directly on the infinite canvas alongside your drawings. Text objects live in the same layer system as strokes, support the full selection and transform workflow, and respect the active color and opacity at the time of creation. Unlike many drawing tools, text in Folish is stored as a structured `TextShape` object — not rasterised or flattened — so it remains fully editable at any zoom level and can be moved, scaled, and rotated non-destructively.
+
+## Creating a Text Object
+
+<Steps>
+  <Step title="Select the Text tool">
+    Click the **Text** tool (`id: "text"`, `toolFunction: "text"`) in the toolbar. Your cursor will change to a crosshair.
+  </Step>
+  <Step title="Click anywhere on the canvas">
+    Tap or click any empty area of the canvas. Folish immediately opens a text draft at that canvas position, overlaid on the drawing at the correct transform (respecting the camera's pan, zoom, and rotation). The text box starts at a minimum size of 160 × 32 px and grows as you type.
+  </Step>
+  <Step title="Type your text">
+    Begin typing immediately — the textarea is focused automatically. The box expands horizontally and vertically as your content grows, tracked via `scrollWidth` and `scrollHeight`.
+  </Step>
+  <Step title="Commit the text">
+    Press **Enter** (without Shift) or click anywhere outside the text box. The trimmed text content is passed to `addText`, assigned a UUID, and stored in the canvas document. The new text shape is automatically selected.
+  </Step>
+</Steps>
+
+<Note>
+  Press **Shift+Enter** to insert a newline inside the text box without committing. Pressing **Escape** cancels the current text draft entirely — no shape is added to the document.
+</Note>
+
+## Editing Existing Text
+
+To re-enter edit mode on a text object you've already committed, select the **Text** tool and click directly on the text. Folish detects the hit via the spatial index and opens the existing `TextShape` as a draft, pre-filled with its current content:
+
+```typescript
+setTextDraftState({
+  id: crypto.randomUUID(),
+  sourceTextId: existingText.id,
+  x: existingText.x + (existingText.offset?.x ?? 0),
+  y: existingText.y + (existingText.offset?.y ?? 0),
+  width: existingText.width,
+  height: existingText.height,
+  text: existingText.text,
+  layerId: existingText.layerId,
+  color: existingText.color,
+  opacity: existingText.opacity,
+})
+```
+
+When you commit, `updateText` is called with the new content and dimensions rather than `addText`, so the same UUID is preserved in the document. This keeps undo history coherent — the edit is a single undoable step, not a delete-and-recreate.
+
+Any uncommitted draft is automatically committed (or discarded, if empty) before opening a new one, so you can click between text objects without losing work.
+
+## The TextShape Data Structure
+
+Every committed text annotation is stored as a `TextShape` in the canvas document's `texts` record:
+
+```typescript
+export interface TextShape {
+  id: string
+  layerId: string
+  x: number
+  y: number
+  width: number
+  height: number
+  text: string
+  color: string
+  opacity: number
+  timestamp: number
+  bounds: Bounds
+  offset?: { x: number; y: number }
+  rotation?: number
+}
+```
+
+<ResponseField name="id" type="string">
+  Unique UUID assigned at creation time. Stable across edits.
+</ResponseField>
+<ResponseField name="layerId" type="string">
+  The ID of the layer this text belongs to. Determined by `activeLayerId` at creation time.
+</ResponseField>
+<ResponseField name="x / y" type="number">
+  Canvas-space position of the top-left corner of the text box, in the layer's local coordinate system.
+</ResponseField>
+<ResponseField name="width / height" type="number">
+  Bounding dimensions of the text box, updated automatically as you type or when a transform is committed.
+</ResponseField>
+<ResponseField name="text" type="string">
+  The raw string content of the annotation. Newlines are preserved.
+</ResponseField>
+<ResponseField name="color" type="string">
+  The hex color string captured from `activeColor` at creation time.
+</ResponseField>
+<ResponseField name="opacity" type="number">
+  Value in range `[0, 1]`, captured from `activeOpacity` at creation time.
+</ResponseField>
+<ResponseField name="offset" type="object" optional>
+  Applied during translation operations before the transform is committed. Keeps the stored `x / y` stable during live drag previews.
+</ResponseField>
+<ResponseField name="rotation" type="number" optional>
+  Accumulated rotation in degrees. Updated by `commitShapeTransform` when the text is rotated via the selection overlay.
+</ResponseField>
+
+## Color and Opacity
+
+A text object's color and opacity are fixed at creation time, inherited directly from the active color and opacity settings in the UI:
+
+```typescript
+setTextDraftState({
+  ...
+  color: state.ui.activeColor,
+  opacity: state.ui.activeOpacity,
+})
+```
+
+To change the color of a text object after it has been committed, select it with the **Selection** or **Marquee** tool and pick a new color. Folish calls `setShapeColor(ids, color)` which updates both strokes and text shapes in a single undoable operation:
+
+```typescript
+setShapeColor: (ids, color) => {
+  // ...
+  get().execute((draft) => {
+    for (const id of targetIds) {
+      if (draft.strokes[id]) draft.strokes[id].color = color
+      if (draft.texts[id]) draft.texts[id].color = color
+    }
+  })
+}
+```
+
+## Transforming Text
+
+Text objects participate in the full transform system alongside strokes. Once selected via the **Selection** or **Marquee** tool, you can:
+
+- **Translate** by dragging inside the selection bounds
+- **Scale** by dragging corner handles (the text box width and height are updated proportionally)
+- **Rotate** by dragging the rotation handle above the selection bounding box
+
+Transforms on text objects are committed by `commitShapeTransform` exactly as they are for strokes:
+
+```typescript
+const textUpdates = selectedIds.flatMap((id) => {
+  const text = state.doc.texts[id]
+  if (!text) return []
+  const position = transformSelectionPoint(
+    { x: text.x + offsetX, y: text.y + offsetY },
+    { origin, scale: selectionScale, rotation: selectionRotation, translation: selectionTranslation }
+  )
+  return [{
+    id,
+    x: position.x,
+    y: position.y,
+    width: Math.max(1, text.width * selectionScale.x),
+    height: Math.max(1, text.height * selectionScale.y),
+    rotation: (text.rotation ?? 0) + selectionRotation,
+  }]
+})
+```
+
+<Warning>
+  Text on a **locked layer** cannot be edited or moved. Clicking a text object on a locked layer with the Text tool does nothing, and selection tools skip it during hit testing.
+</Warning>

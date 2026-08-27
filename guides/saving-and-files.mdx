@@ -1,0 +1,200 @@
+---
+title: "Save, Load, and Manage Folish Canvas Projects"
+sidebarTitle: "Saving & Files"
+description: "Understand how Folish auto-saves your work every 5 seconds, where project files are stored on each OS, the compressed .folish file format, and Zustand localStorage persistence."
+---
+
+Folish uses a two-layer persistence strategy to ensure your work is never lost. A background auto-save mechanism writes the full canvas state to disk every 5 seconds via the Tauri backend, and Zustand's `persist` middleware maintains a compressed snapshot in the browser's localStorage between sessions. Both layers operate silently and independently — you never need to remember to save, but you also have full control over named project files when you need it.
+
+## Auto-Save
+
+The `useAutoSave` hook runs on a 5-second interval for the lifetime of the application. It compares the current canvas document state against the last saved snapshot and only writes to disk if something has changed:
+
+```typescript
+export const useAutoSave = (interval: number = 5000) => {
+  const doc = useCanvasStore((state) => state.doc)
+  const lastSaveRef = useRef<string>("")
+
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      const currentState = JSON.stringify(doc)
+      if (currentState === lastSaveRef.current) return
+
+      try {
+        await invoke("save_canvas", { canvas: doc, filename: "autosave" })
+        lastSaveRef.current = currentState
+      } catch (error) {
+        console.error("Auto-save failed:", error)
+      }
+    }, interval)
+
+    return () => clearInterval(timer)
+  }, [doc, interval])
+}
+```
+
+The comparison uses `JSON.stringify` so any structural change to the canvas document — a new stroke, a renamed layer, a text edit — triggers a write on the next tick. Unchanged canvases produce zero disk I/O.
+
+<Note>
+  The auto-save always writes to a fixed filename called `autosave`. It does not create new timestamped files and does not replace your named project saves. Think of it as a crash-recovery checkpoint, not a version history.
+</Note>
+
+## File Locations
+
+Canvas files are stored in the OS-specific application data directory. Folish creates a `canvases/` subdirectory inside the Tauri app data folder:
+
+<Tabs>
+  <Tab title="Windows">
+    ```
+    %APPDATA%\folish\canvases\
+    ```
+    Typically resolves to `C:\Users\<username>\AppData\Roaming\folish\canvases\`
+  </Tab>
+  <Tab title="macOS">
+    ```
+    ~/Library/Application Support/folish/canvases/
+    ```
+  </Tab>
+  <Tab title="Linux">
+    ```
+    ~/.local/share/folish/canvases/
+    ```
+  </Tab>
+</Tabs>
+
+The directory is created automatically the first time Folish saves a file. You can open it in your file manager to back up, share, or inspect project files directly.
+
+## File Format
+
+Each canvas project is serialised to JSON, then **compressed** before being written to disk. Files use the `.folish` extension, defined as `PROJECT_EXTENSION` in the Rust compression module.
+
+The file pipeline on save:
+
+```
+CanvasState (Rust struct)
+  → serde_json::to_string  (JSON serialisation)
+  → compress_to_file_str   (compression)
+  → <filename>.folish      (written to canvases/)
+```
+
+And on load:
+
+```
+<filename>.folish
+  → decompress_from_file   (decompression)
+  → serde_json::from_str   (deserialisation)
+  → CanvasState            (returned to frontend)
+```
+
+The Rust `CanvasState` struct mirrors the TypeScript types exactly, ensuring lossless round-trips for all stroke points, layer properties, text shapes, and camera state.
+
+## Tauri Backend Commands
+
+The file system operations are exposed as three Tauri commands. All use `camelCase` naming on both the Rust and TypeScript sides.
+
+<Accordion title="save_canvas">
+Serialises and compresses the canvas, then writes it to `<filename>.folish` in the canvases directory. Overwrites any existing file with the same name.
+
+```rust
+#[tauri::command(rename_all = "camelCase")]
+pub async fn save_canvas(
+    app_handle: AppHandle,
+    canvas: CanvasState,
+    filename: String,
+) -> Result<String, String>
+```
+
+Returns the full absolute path of the saved file on success, or an error string on failure.
+
+**TypeScript usage:**
+```typescript
+import { invoke } from "@tauri-apps/api/core"
+
+await invoke("save_canvas", { canvas: doc, filename: "my-project" })
+```
+</Accordion>
+
+<Accordion title="load_canvas">
+Reads and decompresses a `.folish` file by name (without the extension) and deserialises it into a `CanvasState`.
+
+```rust
+#[tauri::command(rename_all = "camelCase")]
+pub async fn load_canvas(
+    app_handle: AppHandle,
+    filename: String,
+) -> Result<CanvasState, String>
+```
+
+Returns a `CanvasState` on success. Returns an error string if the file does not exist or if decompression or deserialisation fails.
+
+**TypeScript usage:**
+```typescript
+const canvas = await invoke<CanvasState>("load_canvas", { filename: "my-project" })
+```
+</Accordion>
+
+<Accordion title="list_canvases">
+Scans the canvases directory and returns a sorted list of all project names (without the `.folish` extension). Only files matching the project extension are included.
+
+```rust
+#[tauri::command(rename_all = "camelCase")]
+pub async fn list_canvases(
+    app_handle: AppHandle,
+) -> Result<Vec<String>, String>
+```
+
+Returns a `string[]` sorted alphabetically. The `autosave` entry will appear in the list alongside any manually named projects.
+
+**TypeScript usage:**
+```typescript
+const projects = await invoke<string[]>("list_canvases")
+// e.g. ["autosave", "character-sketch", "logo-concepts"]
+```
+</Accordion>
+
+## localStorage Persistence
+
+In addition to the Tauri file backend, Zustand's `persist` middleware keeps a compressed snapshot of the canvas in the browser's `localStorage` under the key `folish-storage` (schema version `2`). This allows the canvas to reload instantly on app restart without waiting for a file read.
+
+Stroke points are encoded as base64 before storage to reduce size:
+
+```typescript
+partialize: (state) => ({
+  doc: {
+    ...state.doc,
+    strokes: Object.fromEntries(
+      Object.entries(state.doc.strokes).map(([id, stroke]) => {
+        const { points, ...rest } = stroke
+        return [
+          id,
+          {
+            ...rest,
+            pointsCompressed: stroke.pointsCompressed || encodePoints(stroke.points),
+          },
+        ]
+      }),
+    ),
+  },
+}),
+version: 2,
+```
+
+On rehydration, `decodePoints` restores the full `Point[]` arrays from their compressed form before the spatial index is rebuilt:
+
+```typescript
+onRehydrateStorage: () => (state) => {
+  if (state) {
+    Object.values(state.doc.strokes).forEach((stroke) => {
+      if (stroke.pointsCompressed && !stroke.points) {
+        stroke.points = decodePoints(stroke.pointsCompressed)
+      }
+    })
+    state.spatialIndex = new SpatialIndex()
+    state.rebuildSpatialIndex()
+  }
+}
+```
+
+<Warning>
+  localStorage has a storage limit (typically 5–10 MB depending on the browser). For projects with very large numbers of strokes, the Tauri file backend is the reliable long-term storage. The `folish-storage` key is best treated as a session cache rather than primary backup.
+</Warning>

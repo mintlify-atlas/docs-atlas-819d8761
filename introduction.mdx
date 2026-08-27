@@ -1,0 +1,76 @@
+---
+title: "Folish: High-Performance Infinite Canvas Drawing App"
+sidebarTitle: "Introduction"
+description: "Folish is a desktop drawing application built on Tauri and React 19 that delivers a buttery-smooth infinite canvas experience inspired by Concepts App."
+---
+
+Folish is a native desktop drawing application that gives you an infinite, boundary-free canvas for sketching, illustration, and design work. Built on a Tauri (Rust) backend with a React 19 and TypeScript frontend, it combines the performance of compiled systems code with the flexibility of a modern web UI. With 12 expressive brush types, 10 precision tools, unlimited layers, and full pressure-sensitivity support for Wacom and Huion tablets, Folish is designed for artists who refuse to compromise between power and fluidity. Auto-save runs silently every five seconds so your work is never at risk, and a Zustand + Immer undo/redo stack gives you up to 50 steps of history to experiment freely.
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="wrench" href="/installation">
+    Build Folish from source on macOS, Windows, or Linux. Covers prerequisites, cloning, and running the dev server.
+  </Card>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Go from a fresh install to your first drawing in under five minutes with a guided walkthrough.
+  </Card>
+  <Card title="Canvas" icon="vector-square" href="/concepts/canvas">
+    Learn how the infinite canvas works — pan, zoom, rotate, and the spatial index that keeps rendering fast.
+  </Card>
+  <Card title="Tools & Brushes" icon="paintbrush" href="/concepts/tools-and-brushes">
+    Explore all 12 brush types and 10 tools, their properties, and when to reach for each one.
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<CardGroup cols={3}>
+  <Card title="Infinite Canvas" icon="expand">
+    Pan and zoom without limits. An RBush spatial index culls off-screen strokes so rendering stays fast regardless of canvas complexity.
+  </Card>
+  <Card title="12 Brush Types" icon="paintbrush">
+    From the hairline **Wire** brush to the ultra-smooth **Watercolor**, every brush is tuned with unique smoothing, thinning, and streamline values.
+  </Card>
+  <Card title="Pressure Sensitivity" icon="pen-nib">
+    Full stylus support for Wacom, Huion, and compatible tablet devices. Pressure data feeds directly into stroke thinning and width.
+  </Card>
+  <Card title="Unlimited Layers" icon="layer-group">
+    Create as many layers as your RAM allows. Toggle visibility, lock layers, adjust per-layer opacity, and drag to reorder with live thumbnails.
+  </Card>
+  <Card title="Undo / Redo" icon="arrow-rotate-left">
+    Up to 50 history steps powered by Immer's `produceWithPatches`. Undo with **Ctrl+Z**, redo with **Ctrl+Shift+Z**.
+  </Card>
+  <Card title="Auto-Save" icon="floppy-disk">
+    Your canvas is saved to a compressed file via the Tauri backend every five seconds — silently, without interrupting your flow.
+  </Card>
+  <Card title="Velocity Smoothing" icon="wave-sine">
+    Adaptive stroke stabilisation based on drawing speed smooths out hand tremor and produces clean, confident lines.
+  </Card>
+  <Card title="COPIC Color Wheel" icon="palette">
+    An integrated color wheel with 69 curated sections mirrors the COPIC Sketch marker range, alongside full custom hex input.
+  </Card>
+  <Card title="Dynamic Grid" icon="grid">
+    A reference grid that scales intelligently with your zoom level so guides are always readable at any magnification.
+  </Card>
+</CardGroup>
+
+## Tech Stack
+
+Folish is built on a carefully chosen set of modern technologies, each selected for performance and developer experience.
+
+| Layer | Technology |
+|---|---|
+| Desktop runtime | Tauri v2 (Rust) |
+| Frontend framework | React 19 + TypeScript 5.8 |
+| State management | Zustand v5 with `persist` + `devtools` middleware |
+| Undo / redo | Immer v11 `produceWithPatches` |
+| Stroke rendering | perfect-freehand v1.2.2 |
+| Spatial indexing | rbush v4 |
+| Styling | Tailwind CSS v4 + Phosphor Icons |
+| Animations | GSAP v3 |
+| Package manager | pnpm |
+
+## License
+
+Folish is distributed under the MIT License. Contributions are welcome — fork the repository, create a feature branch, and open a pull request.

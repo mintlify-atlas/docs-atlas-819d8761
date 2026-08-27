@@ -1,0 +1,105 @@
+---
+title: "Folish Roadmap: Upcoming Features and Future Plans"
+sidebarTitle: "Roadmap"
+description: "A look at the features actively planned for Folish — from selection and transform tools to cloud sync, a plugin system, and precision ruler guides."
+---
+
+Folish is in active development, with a foundation of infinite canvas drawing, 12 brush types, 10 tools, and a performant Tauri-backed save system already in place. The roadmap below captures the next wave of features that will close the gap between Folish and professional-grade tools like Concepts App. Each item represents real work tracked in the codebase — some have scaffolding already in place, others are greenfield additions waiting for the right contributor.
+
+<Note>
+  This roadmap reflects the features listed in the [README](https://github.com/ppmpreetham/folish). For the most current status, in-progress work, and community votes on priority, visit the [GitHub Issues page](https://github.com/ppmpreetham/folish/issues).
+</Note>
+
+## Planned Features
+
+<Accordion title="Selection & Transform">
+  **Status:** Partially implemented
+
+  The selection tool (`select`) and selection overlay component (`SelectionOverlay.tsx`) are scaffolded in the main canvas, but the ability to fully manipulate committed strokes — scaling, rotating, and repositioning them — is not yet complete. The transform handles render in the UI, but the underlying stroke-point transformation math and the integration with the `execute` undo/redo wrapper still need to be built out.
+
+  **What this unlocks:**
+  - Scale existing strokes non-destructively
+  - Rotate selected strokes around a pivot point
+  - Move strokes between layers after drawing
+  - Multi-stroke selection via the marquee tool
+
+  **Relevant files:** `src/components/Canvas/SelectionOverlay.tsx`, `src/stores/canvasStore.ts` (selection state), `src/hooks/useCanvasEvents.ts` (pointer handling for transform handles)
+</Accordion>
+
+<Accordion title="Export Options">
+  **Status:** Placeholder component exists
+
+  An Export component placeholder lives at `src/components/UI/Parameters/Export.tsx`. The Tauri backend (`src-tauri/src/file.rs`) already handles compressed binary saves; extending it to render the canvas to alternative formats is the next step.
+
+  **Planned formats:**
+  - **SVG** — vector export of all stroke paths, preserving the `getSvgPathFromStroke` outlines already used for rendering
+  - **PNG** — rasterised export at configurable DPI, using an offscreen canvas to composite all visible layers
+  - **PDF** — page-based export suitable for print workflows
+
+  **Relevant files:** `src/components/UI/Parameters/Export.tsx`, `src-tauri/src/file.rs`, `src/utils/brushEngine.ts`
+</Accordion>
+
+<Accordion title="Shape Tools">
+  **Status:** Not yet started
+
+  Folish currently handles all marks as freehand strokes processed through the brush engine. Shape tools would introduce first-class geometric primitives — rectangles, circles, and straight lines — that are snapped and constrained during drawing and stored as their own shape type distinct from freehand `Stroke` objects.
+
+  **Planned primitives:**
+  - Rectangle (with optional rounded corners)
+  - Circle / Ellipse
+  - Straight Line (with snap-to-angle)
+
+  These would be implemented as new entries in the `TOOLS` array in `src/utils/toolsData.ts` and as a new shape type alongside `Stroke` and `TextShape` in `src/types.ts`, with corresponding rendering in the SVG layer.
+
+  **Relevant files:** `src/utils/toolsData.ts`, `src/types.ts`, `src/components/Canvas/Renderer.tsx`
+</Accordion>
+
+<Accordion title="Cloud Sync">
+  **Status:** Not yet started
+
+  Folish currently auto-saves to the local filesystem every 5 seconds via the `useAutoSave` hook and Tauri's `save_canvas` command. Cloud sync would extend this to a remote backend, enabling canvases to be accessed across multiple devices and opening the door for real-time collaborative editing.
+
+  **What this requires:**
+  - A server-side backend (authentication, canvas storage, conflict resolution)
+  - Tauri HTTP plugin integration for API calls from Rust
+  - Merge strategy for concurrent edits (the Immer patch log is a natural fit for operational transforms)
+  - UI for account management and canvas ownership
+
+  This is the most infrastructure-heavy item on the roadmap and is tracked as a long-term goal. Community input on the preferred backend approach is welcome on the GitHub Issues page.
+</Accordion>
+
+<Accordion title="Plugin System">
+  **Status:** Not yet started
+
+  A plugin system would let the community extend Folish with custom brushes, tools, and canvas behaviours without modifying the core codebase. The `BRUSHES` and `TOOLS` arrays in `src/utils/toolsData.ts` are already data-driven, which provides a natural seam for a runtime registration API.
+
+  **Proposed capabilities:**
+  - Register custom brush types with their own `BrushProperties` configuration
+  - Add new tool entries to the toolbar
+  - Hook into canvas event lifecycle (`onPointerDown`, `onPointerMove`, `onPointerUp`)
+  - Read and write canvas state via a sandboxed store API
+
+  **Relevant files:** `src/utils/toolsData.ts`, `src/utils/brushConfig.ts`, `src/stores/canvasStore.ts`
+</Accordion>
+
+<Accordion title="Rulers">
+  **Status:** Not yet started
+
+  Precision drawing benefits from visual measurement guides. Rulers would add horizontal and vertical ruler bars along the canvas edges that scale with the camera's zoom level, and optionally snap strokes and shapes to guide lines dragged out from the rulers.
+
+  **Planned features:**
+  - Pixel and centimetre unit modes
+  - Ruler bars that stay fixed to the viewport edges as the canvas pans and zooms
+  - Draggable guide lines that can be snapped to
+  - Guide visibility toggle
+
+  The dynamic grid system already in Folish (`src/components/Canvas/Grid.tsx`) handles zoom-adaptive scaling and can serve as a reference implementation for ruler tick rendering.
+
+  **Relevant files:** `src/components/Canvas/Grid.tsx`, `src/stores/canvasStore.ts` (camera state), `src/hooks/useCanvasMath.ts`
+</Accordion>
+
+## Help Shape the Roadmap
+
+The order and scope of these features is not fixed. If one of these items matters to you — or you have a feature idea that isn't listed — the best place to raise it is the [GitHub Issues page](https://github.com/ppmpreetham/folish/issues). Feature requests with clear use-case descriptions and reproduction steps (for bugs) are most likely to get traction.
+
+If you're ready to take on one of these roadmap items, check the [Contributing Overview](/contributing/overview) for the PR process and code style guidelines, and the [Dev Setup](/contributing/development-setup) guide to get your environment running.

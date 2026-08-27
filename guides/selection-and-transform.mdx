@@ -1,0 +1,129 @@
+---
+title: "Select, Move, Scale, and Rotate Strokes in Folish"
+sidebarTitle: "Selection"
+description: "Use the Selection, Marquee, and Nudge tools to pick strokes, apply non-destructive transforms, and fine-tune curves with a falloff-based push-pull workflow."
+---
+
+Folish's selection system is built around the idea that nothing you do to a stroke is permanent until you lift the pointer. All translate, scale, and rotate operations run as live previews over the original geometry — only when you release does `commitShapeTransform` write the final point positions into the document. This means you can freely drag, scale, and spin selected shapes, and a single **Ctrl+Z** will fully reverse the committed transform.
+
+## Selection Tools
+
+Folish offers two ways to select strokes, plus a third tool for sub-stroke point manipulation.
+
+### Lasso Selection (Selection Tool)
+
+The **Selection** tool (`id: "selection"`, `toolFunction: "select"`) lets you draw a freehand loop around any strokes you want to pick. As you drag, Folish traces your path and continuously tests candidate strokes against the lasso polygon using segment-intersection and point-in-polygon tests. The selection updates live as you draw.
+
+- **Default behaviour**: any stroke whose points or outline intersect the lasso is selected.
+- **Wrapping mode** (hold **Ctrl/Cmd** while drawing): only strokes where *every* point lies inside the lasso polygon are selected. Use this when you want to precisely capture a small shape without accidentally grabbing surrounding strokes.
+
+### Marquee Selection (Marquee Tool)
+
+The **Marquee** tool (`id: "marquee"`, `toolFunction: "marquee"`) lets you drag a rectangular selection box. A bounding-box intersection test is run against the spatial index to find candidates efficiently before per-stroke hit testing.
+
+- **Default behaviour**: any stroke whose bounding box intersects the rectangle is selected.
+- **Wrapping mode** (hold **Ctrl/Cmd** while dragging): only strokes fully enclosed within the rectangle are selected.
+
+### Modifier Keys
+
+| Modifier | Effect |
+|---|---|
+| **Shift** + drag / click | Adds to existing selection (additive mode) |
+| **Ctrl / Cmd** + drag | Enables wrapping mode (fully-enclosed only) |
+| Click on empty canvas | Clears the current selection |
+
+<Tip>
+  Selection operations respect layer locking. Strokes on locked layers are skipped by all hit tests — they will never be accidentally selected or modified while locked.
+</Tip>
+
+## Transforms
+
+Once you have a selection, four transforms are available. All are non-destructive: the original point data is untouched during the drag, and the visual update is a CSS/SVG transform overlay. Transforms are committed to the document only on `pointerup` via `commitShapeTransform`.
+
+### Translate (Move)
+
+Drag anywhere inside the selection bounding box to move the selected strokes. The displacement `(dx, dy)` is tracked relative to the drag origin and applied as a `selectionTranslation` overlay until pointer-up.
+
+### Scale
+
+Drag any of the four **corner handles** on the selection bounding box. The scale is computed relative to the **opposite corner**, which acts as the fixed anchor point:
+
+```typescript
+state.setSelectionScale({
+  x: Math.max(MIN_SELECTION_SCALE, Math.abs(startX) < 0.001 ? 1 : nextX / startX),
+  y: Math.max(MIN_SELECTION_SCALE, Math.abs(startY) < 0.001 ? 1 : nextY / startY),
+})
+```
+
+`MIN_SELECTION_SCALE` is `0.05`, preventing shapes from being collapsed to a point.
+
+### Rotate
+
+Drag the **rotation handle** — the circular handle displayed above the centre of the selection bounding box. The rotation angle is computed from the delta between the initial handle angle and the current cursor angle, both measured from the selection centre:
+
+```typescript
+const angle = Math.atan2(point.y - origin.y, point.x - origin.x)
+state.setSelectionRotation(((angle - interaction.startAngle!) * 180) / Math.PI)
+```
+
+The rotation is applied around the bounding box centre as the transform origin.
+
+### Committing a Transform
+
+On pointer-up, `commitShapeTransform` applies the accumulated translate, scale, and rotation to every selected stroke's raw point array, then recalculates bounds and updates the spatial index:
+
+```typescript
+commitShapeTransform(strokeUpdates, textUpdates)
+```
+
+After commit, the transform overlay values are reset to identity (`translation: {x:0,y:0}`, `scale: {x:1,y:1}`, `rotation: 0`).
+
+### Transform Walkthrough
+
+<Steps>
+  <Step title="Select strokes">
+    Activate the **Marquee** tool and drag a rectangle around the strokes you want to transform. They will highlight to show they are selected.
+  </Step>
+  <Step title="Move into position">
+    Click and drag inside the selection bounds to translate the group. The strokes follow your cursor in real time as a preview.
+  </Step>
+  <Step title="Scale to size">
+    Drag one of the four corner handles outward or inward. The selection scales from the opposite corner. Hold nothing — Ctrl/Cmd activates wrapping mode, not proportional lock.
+  </Step>
+  <Step title="Rotate">
+    Drag the rotation handle above the selection box. The entire group rotates around the bounding-box centre.
+  </Step>
+  <Step title="Commit">
+    Lift the pointer. Folish calls `commitShapeTransform`, writes the new geometry to the document, and records an undo entry. Press **Ctrl+Z** at any time to reverse.
+  </Step>
+</Steps>
+
+## Deleting Selected Strokes
+
+With one or more strokes selected, press **Delete** or **Backspace** to remove them from the canvas. This calls `deleteStrokes(selectedIds)` internally, which removes the strokes from their layers, clears their spatial index entries, and records the change as a reversible undo step.
+
+## The Nudge Tool
+
+The **Nudge** tool (`id: "nudge"`, `toolFunction: "nudge"`) provides a softer alternative to redrawing a stroke from scratch. Click a stroke to select it, then drag to push or pull points near your cursor using a smooth falloff curve.
+
+The influence of each drag is governed by a **72 px falloff radius** (`NUDGE_RADIUS_PX = 72`). Each point's influence weight is computed based on its distance from the click origin:
+
+```typescript
+const radius = NUDGE_RADIUS_PX / cameraRef.current.zoom
+const influences = stroke.points.map((strokePoint) => {
+  const distance = Math.hypot(
+    strokePoint.x + offsetX - point.x,
+    strokePoint.y + offsetY - point.y
+  )
+  const normalized = Math.max(0, 1 - distance / radius)
+  return normalized * normalized   // squared for smooth falloff
+})
+```
+
+Points close to the cursor move nearly as much as your drag distance; points near the edge of the radius move only a little; points outside the radius are unaffected. The result is a smooth, organic deformation rather than a hard block transform.
+
+The nudge preview updates live on every pointer move via `setNudgePreview`, and the final geometry is written with `updateStrokeGeometry` on pointer-up.
+
+<Note>
+  The Nudge tool only affects open strokes — it does not operate on fill shapes or text objects. Strokes on locked layers are ignored; attempting to nudge them does nothing.
+</Note>

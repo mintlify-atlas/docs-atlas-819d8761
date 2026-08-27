@@ -1,0 +1,129 @@
+---
+title: "Color Picker, COPIC Wheel, and Stroke Style in Folish"
+sidebarTitle: "Color & Style"
+description: "Control stroke appearance in Folish using the 69-section COPIC color wheel, hex input, per-stroke opacity slider, and brush width — plus how to recolor selected shapes."
+---
+
+Every stroke and text object in Folish carries its own color, opacity, and width, all baked in at creation time. This per-mark approach means you can have dozens of different colors and widths on a single layer without any global style state getting in the way — the canvas is a faithful record of exactly what you drew, when you drew it. Style changes are non-destructive: adjusting the active color or width after drawing affects only new marks, while existing shapes can be recolored in bulk via the selection system.
+
+## The COPIC Color Wheel
+
+Folish's primary color picker is a curated wheel of **69 color sections** arranged in a circular spectrum, inspired by the COPIC marker system used by professional illustrators. Each section represents a distinct, named hue-and-tone combination drawn from the COPIC color library.
+
+Click any section in the wheel to set it as the active color. The selection is immediately reflected in the `activeColor` field of the canvas UI state and will apply to every new stroke or text object you create from that point on.
+
+<Tip>
+  The COPIC wheel is designed for harmonious color selection — adjacent sections are tonally related, and complementary hues are positioned across the wheel. Use it for deliberate color relationships rather than random sampling.
+</Tip>
+
+## Custom Hex Color Input
+
+For colors not represented in the COPIC wheel, Folish provides a direct **hex input field**. Type any valid 6-digit hex code (with or without the leading `#`) to set a precise custom color.
+
+This calls `setActiveColor(color)` on the Zustand store:
+
+```typescript
+setActiveColor: (color) =>
+  set((state) => ({ ui: { ...state.ui, activeColor: color } }))
+```
+
+The hex value is stored verbatim in every stroke and text shape you create, and is also written to the compressed canvas file on save. Any valid CSS color string is accepted.
+
+## Stroke Opacity
+
+The opacity slider controls how transparent each new stroke or text object appears when rendered. It maps to `activeOpacity` in the UI state and is stored directly on each shape:
+
+```typescript
+export interface Stroke {
+  // ...
+  opacity: number  // range: 0–1
+}
+```
+
+- **`0`** — fully transparent (invisible)
+- **`1`** — fully opaque (default)
+- Intermediate values produce semi-transparent marks that blend with the canvas background and other strokes beneath them
+
+Opacity is set at creation time and does not change when you adjust the slider later. To change the opacity of an existing stroke, you would recolor it (opacity is currently a creation-time property per stroke; adjust before drawing for the intended transparency level).
+
+<Tip>
+  Layer opacity and stroke opacity are completely independent. The per-stroke `opacity` value is applied when each individual mark is rendered. Layer opacity is then composited on top of all the marks in that layer as a group-level blend. Lowering a layer's opacity to `0.5` will halve the visual intensity of all strokes on it, but their stored opacity values are unchanged.
+</Tip>
+
+## Stroke Width
+
+The width slider controls the brush size passed as the `size` parameter to perfect-freehand on every new stroke. It is stored as `activeWidth` in the UI state:
+
+```typescript
+setActiveWidth: (width) =>
+  set((state) => ({ ui: { ...state.ui, activeWidth: width } }))
+```
+
+At draw time, it becomes:
+
+```typescript
+const outlinePoints = getStroke(points, {
+  ...DEFAULT_BRUSH,
+  size: ui.activeWidth,
+  simulatePressure: !isPen,
+})
+```
+
+And is stored on the committed `Stroke` object:
+
+```typescript
+addStroke({
+  // ...
+  width: ui.activeWidth,
+  // ...
+})
+```
+
+Width interacts with brush thinning — a **Fountain** brush (`thinning: 0.7`) will taper heavily under light pressure, so the visible stroke width varies significantly from the nominal `activeWidth`. A **Fixed Width** brush (`thinning: 0`) will render at exactly the set size regardless of pressure or velocity.
+
+## Changing the Color of Existing Strokes
+
+To recolor strokes you have already drawn, select them with the **Selection** or **Marquee** tool, then pick a new color from the COPIC wheel or hex input. Folish calls `setShapeColor` on the store with the selected IDs and the new color:
+
+```typescript
+setShapeColor: (ids, color) => {
+  const targetIds = ids.filter((id) => {
+    const stroke = get().doc.strokes[id]
+    const text = get().doc.texts[id]
+    return (stroke?.color ?? text?.color) !== color
+  })
+  if (targetIds.length === 0) return
+  get().execute((draft) => {
+    for (const id of targetIds) {
+      if (draft.strokes[id]) draft.strokes[id].color = color
+      if (draft.texts[id]) draft.texts[id].color = color
+    }
+  })
+}
+```
+
+This operation:
+- Skips shapes that are already the target color (no unnecessary undo entry is created)
+- Updates both `Stroke` and `TextShape` objects in a single `execute` call, so it is a single undoable step
+- Works across mixed selections containing both strokes and text
+
+<Note>
+  Recoloring works on any visible, unlocked stroke regardless of which brush was used to draw it. Fill shapes (`tool: "fill"`) and text objects are both supported.
+</Note>
+
+## Style Reference
+
+<CardGroup cols={2}>
+  <Card title="Active Color">
+    Hex string. Set via COPIC wheel or hex input. Applied to all new strokes and text from the point of selection onward.
+  </Card>
+  <Card title="Active Opacity">
+    Float in range `[0, 1]`. Applied per-shape at creation. Layer opacity composites independently on top.
+  </Card>
+  <Card title="Active Width">
+    Numeric value passed as `size` to perfect-freehand. Interacts with each brush's `thinning` parameter to produce the final visible stroke thickness.
+  </Card>
+  <Card title="Recolor Selection">
+    Select one or more strokes or text objects, then pick a new color. `setShapeColor` writes the change as a single undoable operation.
+  </Card>
+</CardGroup>

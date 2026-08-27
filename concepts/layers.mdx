@@ -1,0 +1,122 @@
+---
+title: "Layer Management: Organize Your Artwork in Folish"
+sidebarTitle: "Layers"
+description: "How Folish layers work: the Layer data model, visibility and locking, per-layer opacity, drag-to-reorder, layer bounds, and the active layer concept."
+---
+
+Layers in Folish give you a structured way to organise complex artwork without mixing unrelated content. Every stroke and text shape belongs to exactly one layer, and you can control each layer's visibility, lock state, and opacity independently. The layers panel lives on the right side of the interface and can be toggled at any time — layers persist with your project, so your organisational structure is always preserved when you save and reopen a file.
+
+## The Layer Data Model
+
+Each layer in Folish is a lightweight record that holds metadata about the layer itself plus ordered lists of the stroke and text IDs that belong to it.
+
+```typescript
+export interface Layer {
+  id: string          // UUID assigned at creation
+  name: string        // User-editable display name
+  visible: boolean    // Whether the layer renders in the viewport
+  locked: boolean     // When true, prevents drawing and editing on this layer
+  opacity: number     // Layer-wide opacity multiplier, range 0–1
+  strokeIds: string[] // Ordered list of stroke IDs (bottom to top)
+  textIds?: string[]  // Ordered list of text shape IDs (bottom to top)
+  bounds?: Bounds     // Bounding box of all content — updated automatically
+}
+```
+
+Strokes and text shapes are stored globally in `CanvasState.strokes` and `CanvasState.texts` (keyed by ID), and the layer holds references to them via `strokeIds` and `textIds`. This means moving content between layers only requires updating ID lists — no data is copied.
+
+## Layer Properties at a Glance
+
+| Property | Values | What it does |
+|---|---|---|
+| **Visibility** | on / off | Hides or shows all content on the layer. Hidden layers are excluded from export. |
+| **Lock** | locked / unlocked | Prevents drawing new strokes and blocks selection or deletion of existing content. |
+| **Opacity** | 0.0 – 1.0 | Scales the transparency of every stroke and text shape on the layer uniformly at render time. |
+| **Name** | any string | The label shown in the layers panel. Defaults to `"Layer"` if renamed to an empty string. |
+| **Drag-to-reorder** | — | Drag a layer row up or down in the panel to change its stacking order. |
+| **Duplicate** | — | Creates an exact copy of the layer and all its content immediately above it, with `(Copy)` appended to the name. |
+| **Delete** | — | Removes the layer and all its strokes and texts permanently. Requires at least one other layer to remain in the document. |
+
+## The Active Layer
+
+At any given time one layer is designated the **active layer**, tracked by `UIState.activeLayerId`. All new strokes and text shapes are automatically routed to the active layer when you draw or type. The active layer is highlighted in the layers panel and auto-switches when you add a new layer.
+
+<Note>
+  **Locked layers cannot be drawn on.** If you attempt to draw and nothing appears, check that your active layer is not locked. Locked layers also block the Selection, Marquee, and Nudge tools from picking up their content — the hit-test code skips any layer where `locked === true`.
+</Note>
+
+You can change the active layer at any time by clicking on it in the layers panel. This does not affect any current selection or in-progress stroke.
+
+## Layer Operations via the Context Menu
+
+Right-clicking on a layer in the panel opens a context menu with the full set of layer actions.
+
+<CardGroup cols={2}>
+  <Card title="Rename" icon="pencil">
+    Double-click the layer name, or choose **Rename** from the context menu. Type the new name and confirm. Empty names fall back to `"Layer"`.
+  </Card>
+  <Card title="Toggle Visibility" icon="eye">
+    Click the eye icon, or use the context menu. Hidden layers remain in the document and are preserved on save — they simply do not render.
+  </Card>
+  <Card title="Toggle Lock" icon="lock">
+    Click the lock icon to prevent any edits to the layer. Unlock it the same way. Locked layers still render normally; they just can't be modified.
+  </Card>
+  <Card title="Duplicate Layer" icon="copy">
+    Creates an identical copy of the layer, including all strokes and text shapes, placed directly above the original. Each duplicated stroke receives a new unique ID.
+  </Card>
+  <Card title="Move Up / Move Down" icon="arrows-up-down">
+    Shifts the layer one step in the stack. Higher layers render on top of lower layers. You can also drag layers to any position.
+  </Card>
+  <Card title="Delete Layer" icon="trash">
+    Permanently removes the layer and all its content. This action is undoable with **Ctrl+Z**. Folish enforces a minimum of one layer — the last layer cannot be deleted.
+  </Card>
+</CardGroup>
+
+## Layer Bounds
+
+Every layer maintains a `bounds` property — a bounding rectangle that tightly encloses all strokes and text shapes on that layer. Folish updates this automatically whenever content is added, moved, or deleted.
+
+```typescript
+export interface Bounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+```
+
+Layer bounds serve two purposes:
+
+1. **Spatial indexing** — the RBush index uses per-stroke bounds (not layer bounds) for viewport culling, but layer bounds allow quick rejection of entire layers that fall outside the current view.
+2. **Export framing** — when exporting a single layer, Folish can use its bounds to size the output canvas precisely around the actual content.
+
+Bounds are recalculated by merging the individual `Bounds` of every stroke and text shape on the layer:
+
+```typescript
+// Called automatically after any structural change to a layer's content
+const recalculateLayerBounds = (doc: CanvasState, layerId: string) => {
+  const layer = doc.layers.find((candidate) => candidate.id === layerId)
+  if (!layer) return
+
+  let nextBounds: Bounds | undefined
+  for (const strokeId of layer.strokeIds) {
+    const bounds = doc.strokes[strokeId]?.bounds
+    if (!bounds) continue
+    nextBounds = nextBounds ? mergeBounds(nextBounds, bounds) : bounds
+  }
+  for (const textId of layer.textIds ?? []) {
+    const bounds = doc.texts[textId]?.bounds
+    if (!bounds) continue
+    nextBounds = nextBounds ? mergeBounds(nextBounds, bounds) : bounds
+  }
+  layer.bounds = nextBounds
+}
+```
+
+<Tip>
+  Use **layer opacity** to blend layers together rather than adjusting the opacity of each stroke individually. Setting a layer's opacity to `0.5` renders the entire layer at half transparency in one pass — it's both faster to set up and easier to adjust later. Layer opacity is part of the saved document and will be restored when you reopen the file.
+</Tip>
+
+## Undo and Redo with Layers
+
+All layer operations — add, delete, rename, reorder, toggle lock, toggle visibility, set opacity, duplicate — are tracked in Folish's undo/redo history. Press **Ctrl+Z** to undo and **Ctrl+Shift+Z** to redo. The history stack holds up to **50 steps**.

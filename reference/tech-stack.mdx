@@ -1,0 +1,90 @@
+---
+title: "Folish Tech Stack: Tauri, React, Zustand, and More"
+sidebarTitle: "Tech Stack"
+description: "Overview of every library powering Folish — Tauri Rust backend, React 19 frontend, RBush viewport culling, and Immer patch-based undo history."
+---
+
+Folish is a native desktop application, not a web service. Its architecture pairs a **Rust backend via Tauri** with a **React 19 + TypeScript frontend** rendered in a lightweight WebView — delivering the cross-platform reach of web tooling while matching the file-system access and raw performance of a native binary. Every technology in the stack was chosen for a concrete reason: Zustand for minimal boilerplate state management, Immer for zero-copy undo history, RBush for O(log n) viewport culling of large stroke sets, and perfect-freehand for mathematically smooth, pressure-sensitive outlines.
+
+## Core Technologies
+
+<CardGroup cols={2}>
+  <Card title="Tauri v2 (Rust)" icon="rust">
+    Native desktop shell that wraps the React frontend in a lightweight WebView. Provides secure file-system access (`save_canvas`, `load_canvas`, `list_canvases` Tauri commands), windowing, and OS-level performance — without Electron's multi-hundred-megabyte Chromium bundle. File I/O uses **Brotli compression** (`brotli v8`) for compact canvas files.
+  </Card>
+  <Card title="React 19 + TypeScript 5.8" icon="react">
+    Component-based UI with full static type safety. React 19's concurrent features keep the toolbar, layer panel, and color picker responsive even during heavy canvas operations. TypeScript 5.8 strict mode enforces interface contracts across the entire codebase — from `BrushProperties` to the Zustand store actions.
+  </Card>
+  <Card title="Zustand v5" icon="database">
+    Lightweight, hook-based state management with `persist` and `devtools` middleware. The store is split into two logical slices: **`doc`** (the canvas document — strokes, layers, camera) and **`ui`** (active tool, brush, selected IDs, panel visibility). Both slices are maintained in a single Zustand store defined in `src/stores/canvasStore.ts`.
+  </Card>
+  <Card title="Immer v11" icon="arrows-rotate">
+    Every mutating action in the Zustand store is wrapped with `produceWithPatches`, which generates a **forward patch** and an **inverse patch** on each state change. Only the patches are stored in the undo stack (up to 50 entries), making history memory usage proportional to the diff rather than to the full document size.
+  </Card>
+  <Card title="perfect-freehand v1.2.2" icon="pencil">
+    Converts raw `PointerEvent` coordinates — augmented with stylus pressure and velocity data — into a smooth, closed outline polygon. The six `BrushProperties` fields (`smoothing`, `thinning`, `streamline`, `easing`, `start`, `end`) map directly to perfect-freehand's option object, giving each of the 12 brushes a distinct feel with minimal custom code.
+  </Card>
+  <Card title="RBush v4" icon="magnifying-glass">
+    R-tree spatial index (`src/utils/spatialIndex.ts`) that stores the bounding box of every stroke and text shape. On each render tick the viewport rectangle is queried — only items whose bounds intersect the current view are passed to the SVG renderer. This keeps frame rate stable on large canvases with thousands of strokes.
+  </Card>
+  <Card title="Tailwind CSS v4" icon="palette">
+    Utility-first CSS framework used for all panel, toolbar, and overlay styling. Version 4's new engine (via `@tailwindcss/vite`) processes styles at Vite build time with no runtime overhead. Phosphor Icons provides the icon set throughout the UI.
+  </Card>
+  <Card title="GSAP v3" icon="film">
+    GreenSock Animation Platform (with the `@gsap/react` integration) drives UI transitions — panel open/close animations, tool-switch easing, and canvas feedback animations. GSAP's precise timeline control ensures animations remain smooth even under heavy drawing load.
+  </Card>
+</CardGroup>
+
+## Rendering Pipeline
+
+When you draw a stroke in Folish, the input travels through a multi-stage pipeline before it is committed to the document. The pipeline is designed so that the **live preview** (what you see while your finger or stylus is moving) always feels instant, while the **final committed stroke** is geometrically correct and spatially indexed for efficient future rendering.
+
+1. A `PointerEvent` (`pointerdown`, `pointermove`, `pointerup`) is captured by the `useCanvasEvents` hook in `src/hooks/useCanvasEvents.ts`, which applies pointer capture to guarantee the full gesture is received.
+2. Each new point is collected with **velocity-based smoothing** — an adaptive alpha algorithm that stabilizes lines based on drawing speed, reducing jitter from fast gestures while preserving detail in slow, careful strokes.
+3. The live stroke is rendered to an **HTML `<canvas>` overlay** via `requestAnimationFrame`, keeping the in-progress outline decoupled from the SVG document layer and ensuring sub-frame latency.
+4. On `pointerup`, the final collected point array is passed to perfect-freehand's `getStroke`, which generates the pressure-weighted outline polygon. `getSvgPathFromStroke` converts that polygon to a compact quadratic Bézier SVG path string.
+5. The completed `Stroke` object (raw points, SVG path, colour, brush settings, bounding box) is dispatched to the **Zustand store** and committed to the SVG renderer, replacing the canvas overlay preview.
+6. The `SpatialIndex` (`RBush`) is updated with the new stroke's bounding box so subsequent viewport queries include it immediately.
+7. `produceWithPatches` records a **forward + inverse Immer patch pair** for the stroke-add mutation, pushing it onto the undo stack and keeping history within the 50-step limit.
+
+## Dependency Versions
+
+The table below lists the exact pinned versions from `package.json` and `src-tauri/Cargo.toml`.
+
+### JavaScript / Node Dependencies
+
+| Package | Version | Role |
+|---|---|---|
+| `react` | ^19.1.0 | UI framework |
+| `react-dom` | ^19.1.0 | DOM renderer |
+| `typescript` | ~5.8.3 | Static type checking |
+| `zustand` | ^5.0.9 | State management |
+| `immer` | ^11.1.3 | Patch-based undo/redo |
+| `perfect-freehand` | ^1.2.2 | Stroke outline generation |
+| `rbush` | ^4.0.1 | Spatial index |
+| `tailwindcss` | ^4.1.18 | Utility-first CSS |
+| `@tailwindcss/vite` | ^4.1.18 | Tailwind Vite integration |
+| `gsap` | ^3.14.2 | UI animations |
+| `@gsap/react` | ^2.1.2 | GSAP React integration |
+| `@tauri-apps/api` | ^2.11.0 | Tauri frontend bindings |
+| `@tauri-apps/cli` | ^2 | Tauri build tooling |
+| `phosphor-react` | ^1.4.1 | Icon set |
+| `clsx` | ^2.1.1 | Conditional class names |
+| `simplify-js` | ^1.2.4 | Stroke simplification (experimental) |
+| `sortablejs` | ^1.15.7 | Drag-and-drop layer reordering |
+| `vite` | ^7.0.4 | Frontend build tool |
+
+### Rust / Cargo Dependencies
+
+| Crate | Version | Role |
+|---|---|---|
+| `tauri` | 2 | Native desktop shell |
+| `tauri-build` | 2 | Build-time Tauri code generation |
+| `tauri-plugin-opener` | 2 | Open URLs / files via OS handler |
+| `serde` | 1 (derive) | Serialisation of canvas structs |
+| `serde_json` | 1 | JSON encode/decode for canvas files |
+| `brotli` | 8.0.2 | Compression of saved canvas files |
+
+<Tip>
+Folish uses **pnpm** as its package manager. Always run `pnpm install` (not `npm install`) to avoid lockfile conflicts.
+</Tip>

@@ -1,0 +1,107 @@
+---
+title: "The Infinite Canvas: Pan, Zoom, and Rotate Freely"
+sidebarTitle: "Canvas"
+description: "The Folish Camera model, pan/zoom/rotate navigation, the dynamic grid, and the two-layer rendering architecture powering the infinite canvas."
+---
+
+The canvas in Folish is truly boundless. There are no fixed edges, no page boundaries, and no upper limit on how far you can zoom in or out. Everything you draw exists in a continuous two-dimensional world coordinate space, and your viewport into that world is controlled entirely by the **Camera** — a lightweight data structure that tracks your current position, zoom level, and canvas rotation. Understanding how the camera works unlocks smooth, confident navigation across even the most complex illustrations.
+
+## The Camera Model
+
+Every aspect of your view is encoded in a single `Camera` object stored inside the app's `UIState`. When you pan, zoom, or rotate, Folish updates this object and the entire scene re-renders to match.
+
+```typescript
+export interface Camera {
+  x: number        // Horizontal translation of the viewport in canvas units
+  y: number        // Vertical translation of the viewport in canvas units
+  zoom: number     // Scale factor (1.0 = 100%, 2.0 = 200%, etc.)
+  rotation: number // Canvas rotation in degrees
+}
+```
+
+The camera transform is applied as a compound SVG transform that first rotates the canvas around the viewport center, then translates and scales it:
+
+```typescript
+const cameraTransform =
+  `translate(${viewportCenter.x}, ${viewportCenter.y}) ` +
+  `rotate(${ui.camera.rotation}) ` +
+  `translate(${-viewportCenter.x}, ${-viewportCenter.y}) ` +
+  `translate(${ui.camera.x}, ${ui.camera.y}) ` +
+  `scale(${ui.camera.zoom})`
+```
+
+This means rotation always pivots around the center of your screen — rotate the canvas and the content under your stylus stays put.
+
+<Note>
+  Camera state (`x`, `y`, `zoom`, `rotation`) is part of `UIState` and is **not persisted** between sessions. When you reopen a project, the camera resets to its default position (`x: 0`, `y: 0`, `zoom: 1`, `rotation: 0`). Only the drawing content — strokes, text, and layers — is saved to disk.
+</Note>
+
+## Navigating the Canvas
+
+Folish supports the full range of input methods you'd expect from a professional drawing app.
+
+<CardGroup cols={3}>
+  <Card title="Pan" icon="hand">
+    Hold the **middle mouse button** and drag to pan in any direction. On a trackpad, use a **two-finger scroll** gesture. You can also hold **Ctrl and drag** with any drawing tool active.
+  </Card>
+  <Card title="Zoom" icon="magnifying-glass">
+    Scroll the **mouse wheel** to zoom in and out centered on your cursor position. On a trackpad, use a **pinch-to-zoom** gesture. You can also select the Zoom tool from the toolbar.
+  </Card>
+  <Card title="Rotate" icon="arrow-clockwise">
+    Select the **Rotate tool** from the toolbar (slot 9 by default), then **drag horizontally** across the canvas. Dragging right rotates clockwise; dragging left rotates counter-clockwise.
+  </Card>
+</CardGroup>
+
+### Keyboard and Pointer Reference
+
+| Action | Input |
+|---|---|
+| Pan | Middle mouse drag, or Ctrl+Drag |
+| Zoom in / out | Scroll wheel (mouse or trackpad pinch) |
+| Rotate canvas | Rotate tool + horizontal drag |
+
+<Tip>
+  The Rotate tool scales rotation at **0.35 degrees per pixel** of horizontal drag, giving you precise control. For small corrections, make short deliberate drags rather than sweeping gestures.
+</Tip>
+
+## The Dynamic Grid
+
+Folish renders a background grid that scales with your zoom level, so you always have a sense of spatial reference no matter how far you zoom in or out. The grid lines are drawn as part of the SVG scene tree inside the camera transform group — they move and scale with the canvas, not with the screen.
+
+The `Grid` component receives the current `Camera` object and adjusts both line spacing and line opacity based on `camera.zoom`. At very low zoom levels the grid coarsens; at high zoom levels it becomes finer, so the visual density stays comfortable across the full zoom range.
+
+<Info>
+  Grid lines are cosmetic only — they have no snapping behaviour in the current release. Content can be placed freely at any sub-pixel coordinate in canvas space.
+</Info>
+
+## Rendering Architecture
+
+Folish uses a two-layer rendering strategy designed to keep drawing feel instantaneous while keeping completed artwork crisp.
+
+<Steps>
+  <Step title="Live stroke — HTML Canvas overlay">
+    While your stylus or pointer is actively moving, the current stroke is drawn onto a transparent **HTML Canvas element** that sits on top of the SVG scene. Each pointer move event schedules a `requestAnimationFrame` callback that calls `renderLiveStroke()`, which clears the canvas and redraws the in-progress outline using `perfect-freehand`. This avoids touching the DOM on every event and ensures the drawing loop runs at the display's native refresh rate.
+  </Step>
+  <Step title="Committed strokes — SVG Renderer">
+    When you lift your stylus, the finalised stroke is appended to the Zustand store. The `Renderer` component reads from the store and renders all persisted strokes as **SVG `<path>` elements** inside the camera transform group. SVG gives you perfectly sharp output at any zoom level with zero pixelation.
+  </Step>
+  <Step title="Viewport culling — RBush spatial index">
+    Folish maintains an **RBush R-tree spatial index** (`SpatialIndex`) alongside the stroke store. Before rendering, the engine queries the index with the current viewport bounds to get only the strokes that intersect the visible area. Off-screen strokes are never passed to the renderer, keeping frame time proportional to visible content rather than total document size.
+
+    ```typescript
+    // Query returns a map of layerId → strokeId[] for visible strokes only
+    queryVisibleStrokes: (viewport: Bounds) => Record<string, string[]>
+    ```
+  </Step>
+</Steps>
+
+<Accordion title="How the spatial index stays in sync">
+  Every time a stroke is added, moved, or deleted, the `SpatialIndex` is updated in the same code path:
+
+  - **Add stroke** → `spatialIndex.insert(stroke.id, stroke.layerId, strokeBounds)`
+  - **Translate strokes** → `spatialIndex.remove(id)` then `spatialIndex.insert(id, layerId, newBounds)`
+  - **Delete strokes** → `spatialIndex.removeBatch(ids)`
+  - **Undo / Redo** → `rebuildSpatialIndex()` reconstructs the entire tree from the current document state
+
+  This means the index is always consistent with the Zustand `doc` state, with no periodic reconciliation needed.
+</Accordion>

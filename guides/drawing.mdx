@@ -1,0 +1,171 @@
+---
+title: "Drawing Strokes: Brushes, Pressure, and Smoothing"
+sidebarTitle: "Drawing"
+description: "Learn how to draw on the infinite canvas in Folish — from selecting a brush and setting width to pressure sensitivity, velocity smoothing, and the Fill tool."
+---
+
+Every mark you make in Folish begins with a stroke. When you press your pointer down on the canvas, Folish starts collecting input points from your device — tracking position, velocity, and pressure — then converts them into a smooth, rendered outline using [perfect-freehand](https://github.com/steveruizok/perfect-freehand). The resulting stroke is committed to the canvas document as an immutable record the moment you lift your pointer. This architecture means the canvas is always in a consistent state, undo is predictable, and no data is ever partially written.
+
+## Your First Stroke
+
+<Steps>
+  <Step title="Select a brush">
+    Click a brush in the left toolbar, or use the tool slots along the bottom. The default active brush is **Pen**. You can also assign any of the 12 brushes to a toolbar slot by long-pressing the slot.
+  </Step>
+  <Step title="Adjust stroke width">
+    In the **Precision Panel** on the right, drag the width slider to the desired size. This sets the `size` parameter passed to perfect-freehand, and is stored as `activeWidth` in the canvas state.
+  </Step>
+  <Step title="Pick a color">
+    Open the color picker from the toolbar and select a color from the COPIC wheel or type a hex value directly. The chosen color becomes `activeColor` and is baked into every stroke you draw until you change it.
+  </Step>
+  <Step title="Draw on canvas">
+    Press and hold your pointer (mouse, stylus, or touch) anywhere on the canvas and drag to draw. The stroke previews in real time on the overlay canvas as you move. Lift the pointer to commit the stroke to the document.
+  </Step>
+  <Step title="Undo if needed">
+    Press **Ctrl+Z** to undo the last committed stroke. Folish stores up to **50 undo steps** via Immer `produceWithPatches`, so you can step back through your drawing history freely.
+  </Step>
+</Steps>
+
+<Note>
+  Each committed stroke is assigned a unique UUID and stored in the canvas document's `strokes` record. Strokes are never mutated in place — every change produces a new Immer patch entry in the undo history, so your full drawing timeline is preserved.
+</Note>
+
+## Velocity Smoothing
+
+Folish applies an adaptive exponential smoothing algorithm to stabilize your strokes in real time, preventing jitter without introducing noticeable lag. The key constants are defined directly in `InfiniteCanvas.tsx`:
+
+```typescript
+const V_MAX = 12
+const ALPHA_MIN = 0.15
+const ALPHA_MAX = 0.85
+```
+
+As you draw, each new pointer position is blended with the last stable point using an alpha value that scales with your drawing speed:
+
+```typescript
+const zoomFactor = Math.sqrt(cameraRef.current.zoom)
+const alpha = Math.min(ALPHA_MAX, Math.max(ALPHA_MIN, (speed * zoomFactor) / V_MAX))
+
+const sx = lastStable.x + (p.x - lastStable.x) * alpha
+const sy = lastStable.y + (p.y - lastStable.y) * alpha
+```
+
+- **Slow strokes** (low speed) produce a low alpha — the new point is pulled only slightly toward your cursor, creating a heavily smoothed, flowing line.
+- **Fast strokes** (high speed approaching `V_MAX`) produce alpha near `ALPHA_MAX = 0.85`, allowing points to track your gesture closely with minimal lag.
+- The `zoomFactor` (`√zoom`) compensates for the fact that small physical movements become larger logical movements at high zoom levels.
+
+<Tip>
+  If you're working at high zoom on fine detail, the zoom compensation in the smoothing formula means your lines will feel responsive even for tiny strokes. At low zoom, the same physical gesture is treated as higher velocity, which reduces wobble on fast, sweeping marks.
+</Tip>
+
+## Pressure Sensitivity
+
+Folish has full first-class support for stylus pressure. Pressure data is read directly from the Web Pointer Events API:
+
+```typescript
+// From onStrokeMove in InfiniteCanvas.tsx
+const newPressure = p.pointerType === "pen" ? p.pressure : 0.5
+```
+
+When `pointerType === "pen"` (Wacom, Huion, Apple Pencil, and any Pointer Events–compliant stylus), the raw `PointerEvent.pressure` value in the range `[0, 1]` is captured and stored in each `Point`:
+
+```typescript
+export interface Point {
+  x: number
+  y: number
+  pressure: number
+}
+```
+
+When drawing with a **mouse** (where `pointerType === "mouse"`), pressure is fixed at `0.5` and perfect-freehand's `simulatePressure` option is enabled so the stroke tapers naturally based on velocity:
+
+```typescript
+const outlinePoints = getStroke(points, {
+  ...DEFAULT_BRUSH,
+  size: ui.activeWidth,
+  simulatePressure: !isPen,
+})
+```
+
+This ensures brushes like **Fountain** (thinning: `0.7`) and **Marker** (thinning: `-0.5`) produce natural variation even when no physical pressure data is available.
+
+<CardGroup cols={2}>
+  <Card title="Wacom / Huion Tablets">
+    Full hardware pressure from `PointerEvent.pressure`. Every `Point` in the stroke stores the live pressure value, giving brushes their full expressive range.
+  </Card>
+  <Card title="Mouse Input">
+    Pressure is simulated at `0.5` per point. Stroke taper is generated by perfect-freehand's velocity simulation, producing smooth tapers at stroke start and end.
+  </Card>
+</CardGroup>
+
+## Brush Types
+
+Folish ships 12 brushes, each configured through the `BrushProperties` interface:
+
+```typescript
+export interface BrushProperties {
+  smoothing: number
+  thinning: number
+  streamline: number
+  easing: (t: number) => number
+  start: { taper: number; cap: boolean }
+  end: { taper: number; cap: boolean }
+}
+```
+
+<Accordion title="All 12 brushes and their key properties">
+| Brush | ID | Key Setting |
+|---|---|---|
+| Pen | `pen` | Default balanced properties |
+| Fountain | `fountain` | `thinning: 0.7` — strong pressure taper |
+| Dynamic Pen | `dynamic-pen` | `streamline: 0.8` — high path smoothing |
+| Fixed Width | `fixed-width` | `thinning: 0` — uniform width regardless of pressure |
+| Wire | `wire` | `smoothing: 0.1, thinning: 0` — raw, jagged line |
+| Soft Pencil | `soft-pencil` | `smoothing: 0.8` — flowing, soft edges |
+| Hard Pencil | `hard-pencil` | `smoothing: 0.2` — precise, sharp strokes |
+| Marker | `marker` | `thinning: -0.5` — wider under pressure |
+| Watercolor | `watercolor` | `smoothing: 0.9` — very high smoothing |
+| Airbrush | `airbrush` | `thinning: 0.2` — subtle pressure response |
+| Fill | `fill` | Closed polygon fill shape |
+| Dotted | `dotted` | Dot-based stroke pattern |
+</Accordion>
+
+## The Fill Tool
+
+The **Fill** brush draws a closed polygon rather than an open stroke. As you drag, Folish accumulates a polyline of canvas-space points. When you lift the pointer, the shape is closed and the enclosed area is filled with the active color.
+
+The fill requires a minimum of **3 points** and a minimum enclosed area (computed via the shoelace formula) to commit — tiny accidental marks are automatically discarded:
+
+```typescript
+let doubledArea = 0
+for (let index = 0; index < fill.points.length; index++) {
+  const current = fill.points[index]
+  const next = fill.points[(index + 1) % fill.points.length]
+  doubledArea += current.x * next.y - next.x * current.y
+}
+if (Math.abs(doubledArea) < 4 / (cameraRef.current.zoom * cameraRef.current.zoom)) return
+```
+
+The filled area is stored as a `Stroke` with `tool: "fill"` and `width: 0`. Its path data is a closed SVG path:
+
+```typescript
+addStroke({
+  id: crypto.randomUUID(),
+  pathData: getClosedPathData(fill.points),
+  points: fill.points.map((point) => ({ ...point, pressure: 0.5 })),
+  color: fill.color,
+  width: 0,
+  opacity: fill.opacity,
+  tool: "fill",
+  layerId: fill.layerId,
+  timestamp: Date.now(),
+})
+```
+
+A translucent preview of the polygon is rendered while you drag, so you can see the shape before committing.
+
+## Erasing
+
+Folish does not use a destructive eraser that modifies stroke geometry. Instead, strokes can be removed by selecting them with the **Selection** or **Marquee** tool and pressing **Delete** or **Backspace**. This preserves the full undo history — deleted strokes can always be restored with **Ctrl+Z**.
+
+For localised editing of a stroke's shape without deleting it entirely, use the **Nudge** tool to push points along a curve without redrawing.

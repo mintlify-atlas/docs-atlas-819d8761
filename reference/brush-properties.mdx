@@ -1,0 +1,123 @@
+---
+title: "Brush Properties: Smoothing, Thinning, and Taper Reference"
+sidebarTitle: "Brush Properties"
+description: "Reference for BrushProperties — how smoothing, thinning, streamline, easing, and taper values shape every stroke rendered by perfect-freehand in Folish."
+---
+
+Every brush in Folish is defined by a `BrushProperties` object that is passed directly into [perfect-freehand](https://github.com/steveruizok/perfect-freehand) at stroke-render time. Perfect-freehand takes the raw pointer points (with pressure and velocity data) and uses these properties to produce a smooth, pressure-sensitive outline polygon, which is then converted to an SVG path and painted to the canvas. Tuning these six properties determines everything about how a brush feels — from the delicate taper of a fountain pen to the blunt uniform width of a marker.
+
+## BrushProperties Interface
+
+```typescript
+export interface BrushProperties {
+  smoothing: number
+  thinning: number
+  streamline: number
+  easing: (t: number) => number
+  start: { taper: number; cap: boolean }
+  end: { taper: number; cap: boolean }
+}
+```
+
+## Default Brush Configuration
+
+The `DEFAULT_BRUSH` object from `src/utils/brushConfig.ts` is the baseline that every brush extends:
+
+```typescript
+export const DEFAULT_BRUSH = {
+  smoothing: 0.5,
+  thinning: 0.5,
+  streamline: 0.5,
+  easing: (t: any) => t,
+  start: {
+    taper: 0,
+    cap: true,
+  },
+  end: {
+    taper: 0,
+    cap: true,
+  },
+}
+```
+
+## Property Reference
+
+<ParamField path="smoothing" type="number" default="0.5">
+  Controls how much the stroke outline is smoothed after the pressure-weighted outline polygon is generated. The range is **0 – 1**. Higher values produce rounder, more fluid curves; lower values let more of the raw pointer jitter through, which can be desirable for a scratchy pencil feel.
+</ParamField>
+
+<ParamField path="thinning" type="number" default="0.5">
+  Determines how much the stroke width changes in response to pen pressure. The range is **–1 to 1**:
+  - **Positive values** — the stroke thins at low pressure and widens under heavy pressure (natural pen behaviour).
+  - **Zero** — the stroke maintains a perfectly uniform width regardless of pressure (Fixed Width, Wire).
+  - **Negative values** — the stroke *widens* at low pressure and thins under heavy pressure, producing the characteristic "chisel marker" look used by the Marker brush (`thinning: -0.5`).
+</ParamField>
+
+<ParamField path="streamline" type="number" default="0.5">
+  How aggressively the raw pointer path is streamlined toward a smooth ideal curve. The range is **0 – 1**. Higher values effectively add input lag in exchange for a perfectly flowing line — useful for calligraphy and precision illustration. The Dynamic Pen brush uses `streamline: 0.8` for this reason.
+</ParamField>
+
+<ParamField path="easing" type="(t: number) => number" default="(t) => t">
+  A pressure easing function applied to the `thinning` calculation before the outline polygon is computed. The default is the identity function `(t) => t` (linear pressure response). Providing a custom easing — such as a cubic ease-in — lets you make a brush feel more or less sensitive in the low-pressure and high-pressure ranges.
+</ParamField>
+
+<ParamField path="start.taper" type="number" default="0">
+  The pixel length of the taper at the **beginning** of a stroke. `0` means no taper — the stroke starts at full width. A positive value produces a pointed entry, useful for calligraphy brushes or fountain pens.
+</ParamField>
+
+<ParamField path="start.cap" type="boolean" default="true">
+  Whether to draw a round cap at the start of the stroke when `start.taper` is `0`. Set to `false` for a flat, square start.
+</ParamField>
+
+<ParamField path="end.taper" type="number" default="0">
+  The pixel length of the taper at the **end** of a stroke. Works identically to `start.taper` but applies to the stroke's trailing tip.
+</ParamField>
+
+<ParamField path="end.cap" type="boolean" default="true">
+  Whether to draw a round cap at the end of the stroke when `end.taper` is `0`. Set to `false` for a flat finish.
+</ParamField>
+
+## Brush Property Comparison
+
+All 12 brushes are listed below with their non-default property values. Properties not listed for a brush use the `DEFAULT_BRUSH` values (`smoothing: 0.5`, `thinning: 0.5`, `streamline: 0.5`, caps: `true`, tapers: `0`).
+
+| Brush | smoothing | thinning | streamline | Notes |
+|---|---|---|---|---|
+| **Pen** | 0.5 | 0.5 | 0.5 | Balanced defaults; general-purpose drawing |
+| **Fountain** | 0.5 | **0.7** | 0.5 | High thinning for dramatic pressure response |
+| **Dynamic Pen** | 0.5 | 0.5 | **0.8** | Heavy streamlining for calligraphic flow |
+| **Fixed Width** | 0.5 | **0** | 0.5 | Pressure has no effect on width |
+| **Wire** | **0.1** | **0** | 0.5 | Minimal smoothing + zero thinning for a sharp, technical line |
+| **Soft Pencil** | **0.8** | 0.5 | 0.5 | High smoothing for a soft, blended feel |
+| **Hard Pencil** | **0.2** | 0.5 | 0.5 | Low smoothing exposes raw pointer texture |
+| **Marker** | 0.5 | **-0.5** | 0.5 | Negative thinning gives a widening-under-light-pressure chisel effect |
+| **Watercolor** | **0.9** | 0.5 | 0.5 | Maximum smoothing for fluid, organic strokes |
+| **Airbrush** | 0.5 | **0.2** | 0.5 | Low thinning for a soft, nearly uniform spray |
+| **Fill** | 0.5 | 0.5 | 0.5 | Default properties; fill behaviour is handled at tool level |
+| **Dotted** | 0.5 | 0.5 | 0.5 | Default properties; dot pattern handled at render level |
+
+## getSvgPathFromStroke
+
+Once perfect-freehand returns the finished outline as an array of `[x, y]` coordinate pairs, `getSvgPathFromStroke` in `src/utils/brushEngine.ts` converts it to a compact SVG path string:
+
+```typescript
+export function getSvgPathFromStroke(stroke: number[][]): string {
+  if (!stroke.length) return ""
+  const d = stroke.reduce(
+    (acc, [x0, y0], i, arr) => {
+      const [x1, y1] = arr[(i + 1) % arr.length]
+      acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2)
+      return acc
+    },
+    ["M", ...stroke[0], "Q"]
+  )
+  d.push("Z")
+  return d.join(" ")
+}
+```
+
+The function walks the polygon points and emits a series of **quadratic Bézier curve** (`Q`) segments. Each segment's control point is the raw polygon vertex, and the target end-point is the midpoint between the current and next vertex. Closing the path with `Z` produces a continuous, closed outline. This technique — sometimes called "chained midpoint Béziers" — converts a relatively coarse polygon into a visually smooth, continuously curved shape without requiring a cubic spline solver.
+
+<Note>
+The input `stroke` array comes directly from perfect-freehand's `getStroke` function. Do not confuse it with the `Stroke` type in `src/types.ts`, which is the document-level data model holding the raw input points, brush settings, colour, and computed bounds.
+</Note>

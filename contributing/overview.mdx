@@ -1,0 +1,112 @@
+---
+title: "Contributing to Folish: Pull Requests and Guidelines"
+sidebarTitle: "Overview"
+description: "Learn how to contribute to Folish — from filing bug reports and feature requests to submitting code changes and improving documentation."
+---
+
+Folish is an open-source project, and contributions of every kind are genuinely welcomed. Whether you've spotted a bug, have an idea for a new brush, want to improve the documentation, or are ready to dive into the Rust backend — there's a place for you here. The project is built on a philosophy of keeping the codebase clean and the experience fast, so all contributions are reviewed with both correctness and performance in mind. The best starting point for any contribution is the [GitHub repository](https://github.com/ppmpreetham/folish).
+
+## Ways to Contribute
+
+<CardGroup cols={2}>
+  <Card title="Bug Reports" icon="bug">
+    Found something broken? Open an issue on GitHub with steps to reproduce, your OS, and the Folish version. Screenshots or screen recordings are especially helpful for canvas rendering bugs.
+  </Card>
+  <Card title="Feature Requests" icon="lightbulb">
+    Have an idea that would improve the drawing experience? Open a GitHub Issue tagged as a feature request. Check the [Roadmap](/contributing/roadmap) first to see if it's already planned.
+  </Card>
+  <Card title="Code Contributions" icon="code">
+    Frontend (React/TypeScript) and backend (Rust/Tauri) contributions are both welcome. Follow the code style guidelines below and open a Pull Request with a clear description of your changes.
+  </Card>
+  <Card title="Documentation" icon="book">
+    Typos, outdated instructions, missing examples — documentation improvements are always appreciated and a great way to get familiar with the project before diving into code.
+  </Card>
+</CardGroup>
+
+## Pull Request Process
+
+Every contribution — large or small — follows the same straightforward workflow. Make sure your branch is up to date with `main` before opening a PR, and keep individual PRs focused on a single concern.
+
+<Steps>
+  <Step title="Fork the repository on GitHub">
+    Navigate to [github.com/ppmpreetham/folish](https://github.com/ppmpreetham/folish) and click **Fork** to create your own copy of the repository.
+  </Step>
+  <Step title="Create a feature branch">
+    Branch off `main` with a descriptive name that reflects your change:
+
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
+  </Step>
+  <Step title="Make your changes and test locally">
+    Run the full development stack while you work to verify your changes in the real Tauri window — not just the browser:
+
+    ```bash
+    pnpm tauri dev
+    ```
+
+    For frontend-only changes, `pnpm dev` starts the Vite server on port `1420` without spinning up the Rust backend.
+  </Step>
+  <Step title="Commit with a descriptive message">
+    Write commit messages in the imperative mood, describing *what* the change does:
+
+    ```bash
+    git commit -m 'Add feature: description'
+    ```
+  </Step>
+  <Step title="Push your branch">
+    Push to your fork:
+
+    ```bash
+    git push origin feature/your-feature-name
+    ```
+  </Step>
+  <Step title="Open a Pull Request on GitHub">
+    Navigate to your fork on GitHub and click **Compare & pull request**. Fill in the PR template with a summary of your changes, any relevant issue numbers, and screenshots if the change is visual.
+  </Step>
+</Steps>
+
+## Code Style Guidelines
+
+Folish has a set of consistent patterns across the codebase that all contributions should follow. Reviewers will flag deviations during the PR review.
+
+### TypeScript
+
+The project runs TypeScript in strict mode (`"strict": true` in `tsconfig.json`), with `noUnusedLocals`, `noUnusedParameters`, and `noFallthroughCasesInSwitch` all enabled. All new code must compile cleanly without errors or suppressed warnings.
+
+```json
+{
+  "strict": true,
+  "noUnusedLocals": true,
+  "noUnusedParameters": true,
+  "noFallthroughCasesInSwitch": true
+}
+```
+
+### React Components
+
+Write all components as React functional components using hooks. Class components are not used anywhere in the codebase. Co-locate component-specific logic in custom hooks under `src/hooks/` when the logic is reusable or complex enough to warrant extraction.
+
+```typescript
+// Preferred pattern: functional component with typed props
+const MyComponent: React.FC<MyComponentProps> = ({ value, onChange }) => {
+  return <div>{value}</div>;
+};
+```
+
+### State Management
+
+All application state lives in the Zustand store at `src/stores/canvasStore.ts`. New state fields and mutations must be added as explicit actions on the store — do not mutate state directly from component bodies.
+
+```typescript
+// All state mutations go through named store actions
+const { setActiveTool, setActiveLayer } = useCanvasStore();
+```
+
+<Note>
+  All document state mutations — adding or removing strokes, creating or deleting layers, inserting text shapes — **must** go through the `execute` action in `canvasStore.ts`. The `execute` wrapper uses Immer's `produceWithPatches` to record forward and inverse patches, which is how Folish implements its 50-step undo/redo history. Mutations that bypass `execute` will not be undoable.
+</Note>
+
+### Rust Backend
+
+Tauri commands in `src-tauri/src/` follow Rust's standard formatting conventions. Run `cargo fmt` before committing any Rust changes. All new Tauri commands must be registered in `src-tauri/src/lib.rs` and have corresponding TypeScript bindings or `invoke` calls on the frontend.
